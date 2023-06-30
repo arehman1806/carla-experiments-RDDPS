@@ -2,7 +2,7 @@
 import carla
 import random
 import time
-from agents.navigation.basic_agent import BasicAgent
+from agents.navigation.rddps_agent import RDDPSAgent
 # from agents.navigation.behavior_agent import BehaviorAgent
 import numpy as np
 import torch
@@ -71,7 +71,7 @@ sensor = world.spawn_actor(cam_bp, sensor_transform, attach_to=ego_vehicle)
 sensor.listen(lambda image: process_img(image))
 # sensor.listen(lambda image: image.save_to_disk(f"./recording/{image.frame}.png"))
 
-agent = BasicAgent(ego_vehicle)
+agent = RDDPSAgent(ego_vehicle)
 destination = carla.Location(x=-77.6, y=60, z=0)
 agent.set_destination(destination)
 
