@@ -87,19 +87,19 @@ class RDDPSAgent(object):
         This method updates the information regarding the ego
         vehicle based on the surrounding world.
         """
-        # self._speed = get_speed(self._vehicle)
-        # self._speed_limit = self._vehicle.get_speed_limit()
-        # self._local_planner.set_speed(self._speed_limit)
-        # self._direction = self._local_planner.target_road_option
-        # if self._direction is None:
-        #     self._direction = RoadOption.LANEFOLLOW
+        self._speed = get_speed(self._vehicle)
+        self._speed_limit = self._vehicle.get_speed_limit()
+        self._local_planner.set_speed(self._speed_limit)
+        self._direction = self._local_planner.target_road_option
+        if self._direction is None:
+            self._direction = RoadOption.LANEFOLLOW
 
-        # self._look_ahead_steps = int((self._speed_limit) / 10)
+        self._look_ahead_steps = int((self._speed_limit) / 10)
 
-        # self._incoming_waypoint, self._incoming_direction = self._local_planner.get_incoming_waypoint_and_direction(
-        #     steps=self._look_ahead_steps)
-        # if self._incoming_direction is None:
-        #     self._incoming_direction = RoadOption.LANEFOLLOW
+        self._incoming_waypoint, self._incoming_direction = self._local_planner.get_incoming_waypoint_and_direction(
+            steps=self._look_ahead_steps)
+        if self._incoming_direction is None:
+            self._incoming_direction = RoadOption.LANEFOLLOW
 
     def add_emergency_stop(self, control):
         """
@@ -394,14 +394,12 @@ class RDDPSAgent(object):
         return (False, None, -1)
     
 
-    def _detect_opposite_direction_vehicles(self, vehicle_list=None, max_distance=None):
+    def _detect_opposite_direction_vehicles(self, vehicle_list=None):
         """
         Method to check if there is a vehicle coming from the opposite direction at the junction.
 
         :param vehicle_list (list of carla.Vehicle): list contatining oncomming vehicle objects.
             If None, all vehicle in the scene are used
-        :param max_distance: max distance to check for vehicles.
-            If None, the base threshold value is used
         """
         if self._ignore_vehicles:
             return (False, None, -1)
@@ -420,12 +418,14 @@ class RDDPSAgent(object):
 
 
         #1: filter out vehicles that have crossed the concerned junction
-        #2: of those vehicles which have not yet crossed the junction find out the one which is closest to the ego vehicle, and find out its speed and location
+        #2: of those vehicles which have not yet crossed the junction find out the one which is 
+        #   closest to the ego vehicle, and find out its speed and location
 
         vehicle_count = 0
         distance_to_ego = 1e9
         closest_vehicle = None
         danger = False
+
         for target_vehicle in vehicle_list:
             target_location = target_vehicle.get_location()
             distance = target_location.distance(ego_location)
@@ -437,74 +437,11 @@ class RDDPSAgent(object):
                     closest_vehicle = target_vehicle
                     distance_to_ego = distance
                     danger = True
+        
         if closest_vehicle is None:
             return danger, -1, -1
+        
         closest_vehicle_wp = self._map.get_waypoint(closest_vehicle.get_location())
         distance_to_juntion = 0 if closest_vehicle_wp.is_junction else closest_vehicle_wp.next_until_lane_end(1)
+        
         return danger, distance_to_juntion, closest_vehicle.get_velocity().length()
-                
-            
-            # print(f"vehicle {target_vehicle.id} has heading {heading}")
-        print(f"{vehicle_count} vehicles are before the junction")
-        return True, -1, -1
-
-        # danger = False
-        # print(len(vehicle_list))
-        # min_distance_to_junction = 1e9
-        # speed_of_nearest_car = 0
-        # selected_vehicle = None
-        # angle_bw_vectors = None
-        # # these vehicles are assumed to be oncomming. Have a look at method parameters.
-        # for target_vehicle in vehicle_list:
-        #     # print(target_vehicle.attributes.get("rolename"))
-        #     # print(self._vehicle.attributes.get("role_name"))
-        #     target_transform = target_vehicle.get_transform()
-        #     target_rotation = target_transform.rotation
-        #     target_wpt = self._map.get_waypoint(target_transform.location, lane_type=carla.LaneType.Any)
-        #     angle_bw_vectors = target_transform.get_forward_vector().get_vector_angle(ego_transform.get_forward_vector())
-        #     if angle_bw_vectors < 3:
-        #         print(f"continuing bec angle bw vectors is {angle_bw_vectors}")
-        #         continue
-        #     at_junction = False
-        #     if target_wpt.is_junction:
-        #         at_junction = True
-        #     distance_until_lane_end = len(target_wpt.next_until_lane_end(1))
-        #     if target_wpt.is_junction:
-        #         min_distance_to_junction = 0
-        #         speed_of_nearest_car = target_vehicle.get_velocity().length()
-        #         danger = True
-        #     elif distance_until_lane_end < min_distance_to_junction:
-        #         min_distance_to_junction = distance_until_lane_end
-        #         speed_of_nearest_car = target_vehicle.get_velocity().length()
-        #         danger = True
-        #     selected_vehicle = target_vehicle
-        # vehicle_rolename = selected_vehicle.attributes.get("rolename")
-        # print(f"angle bw vectors {angle_bw_vectors}")
-        # return danger, min_distance_to_junction, speed_of_nearest_car
-
-            
-
-            # # checking if this is working correctly
-            # color = target_vehicle.attributes.get("color")
-            # if at_junction:
-            #     print(f"{color} is at the junction with junction. vector angle: {angle_bw_vectors}")
-            # else:
-            #     print(f"{color} vehicle is approx {distance_until_lane_end}m away from a junction. vector angle: {angle_bw_vectors}")
-
-            # # Only interested in vehicles at junctions
-            # if ego_wpt.is_junction and target_wpt.is_junction:
-            #     if target_wpt.road_id != ego_wpt.road_id or target_wpt.lane_id == ego_wpt.lane_id:
-            #         next_wpt = self._local_planner.get_incoming_waypoint_and_direction(steps=3)[0]
-            #         if not next_wpt:
-            #             continue
-            #         if target_wpt.road_id != next_wpt.road_id or target_wpt.lane_id == next_wpt.lane_id:
-            #             continue
-
-            #     # Calculate yaw difference
-            #     yaw_difference = abs(ego_transform.rotation.yaw - target_transform.rotation.yaw)
-            #     # print(f"vehicle observed at the junction with yaw ${yaw_difference}")
-                
-            #     if yaw_difference > 150 and yaw_difference < 210:
-            #         return (True, target_vehicle, compute_distance(target_transform.location, ego_transform.location))
-
-        # return (False, None, -1)
