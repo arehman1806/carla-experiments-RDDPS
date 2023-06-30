@@ -1,0 +1,3 @@
+[submodule "yolov7_carla_object_detection"]
+	path = yolov7_carla_object_detection
+	url = git@github.com:arehman1806/yolov7_carla_object_detection.git
