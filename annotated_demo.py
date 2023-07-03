@@ -165,9 +165,6 @@ class IntersectionAnnotator:
             points_2d.append(point_2d.flatten())
         return points_2d
 
-
-
-
     def get_junction_waypoint(self):
         # get the waypoint ahead of the vehicle
         waypoint_ahead = self.map.get_waypoint(self.ego_vehicle.get_location())
@@ -212,7 +209,7 @@ class IntersectionAnnotator:
         min_y = min([wp.transform.location.y for wp in intersection_waypoint])
         max_y = max([wp.transform.location.y for wp in intersection_waypoint])
 
-        print(f"{min_x} {min_y}, {max_x}, {max_y}\n\n\n\n\n\n")
+        # print(f"{min_x} {min_y}, {max_x}, {max_y}\n\n\n\n\n\n")
 
         # z = junction_waypoint.transform.location.z  # get the Z-coordinate of the junction waypoint
         z = 0
@@ -224,30 +221,6 @@ class IntersectionAnnotator:
         bounding_box_3d.append(carla.Location(x=max_x, y=min_y, z=z))  # bottom-right corner
 
         return bounding_box_3d
-
-
-    def get_intrinsic_camera_matrix(self):
-        # Image size
-        width = 640
-        height = 480
-
-        # FOV
-        fov = 90  # in degrees
-
-        # Convert FOV from degrees to radians
-        fov_rad = radians(fov)
-
-        # Compute fx and fy
-        fx = width / (2 * tan(fov_rad / 2))
-        fy = height / (2 * tan(fov_rad / 2))
-
-        # Compute cx and cy
-        cx = width / 2
-        cy = height / 2
-
-        # Construct the intrinsic matrix
-        K = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]])
-        return K
 
     def process_image(self, image):
         img = np.reshape(np.copy(image.raw_data), (image.height, image.width, 4)) 

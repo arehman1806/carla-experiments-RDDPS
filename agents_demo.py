@@ -8,21 +8,12 @@ import numpy as np
 import torch
 import cv2
 
+from queue import Queue
+
+from junction_annotator import JunctionAnnotator
+from state_extractor import StateExtractor
+
 from yolov7_carla_object_detection.carla_detect import CarlaObjectDetector
-
-annotated_image_queue = []
-
-
-# initialize object detector
-obj_detector = CarlaObjectDetector()
-
-def process_img(image):
-    # Convert the image from CARLA format to an OpenCV image (RGB)
-    img0 = np.array(image.raw_data).reshape((image.height, image.width, 4))
-    img0 = img0[:, :, :3]
-    _, annotated_image = obj_detector.detect(img0)
-    annotated_image_queue.append(annotated_image)
-    
 
 # Connect to the server
 client = carla.Client('localhost', 2000)
@@ -36,6 +27,17 @@ settings = world.get_settings()
 settings.synchronous_mode = True
 settings.fixed_delta_seconds = 0.05  # 0.05 seconds (20 FPS)
 world.apply_settings(settings)
+
+camera_image_queue = Queue()
+def process_img(image):
+    # Convert the image from CARLA format to an OpenCV image (RGB)
+    img0 = np.array(image.raw_data).reshape((image.height, image.width, 4))
+    img0 = img0[:, :, :3]
+    camera_image_queue.put(np.array(img0))
+
+
+annotated_image_queue = []
+
 
 
 
@@ -77,16 +79,42 @@ agent.set_destination(destination)
 
 world = client.get_world()
 count = 0
+
+# initialize object detector
+obj_detector = CarlaObjectDetector()
+junction_annotator = JunctionAnnotator(world, ego_vehicle=ego_vehicle, camera_bp=cam_bp, camera=sensor)
+state_extractor = StateExtractor()
+    
+def annotatate_with_junction(camera_image, bbox):
+    for i in range(len(bbox) - 1):
+        p1 = bbox[i]
+        p2 = bbox[i+1]
+        cv2.line(camera_image, (int(p1[0]),int(p1[1])), (int(p2[0]),int(p2[1])), (0,0,255, 255), 1)
+    p1 = bbox[0]
+    p2 = bbox[len(bbox) - 1]
+    cv2.line(camera_image, (int(p1[0]),int(p1[1])), (int(p2[0]),int(p2[1])), (0,0,255, 255), 1)
+    return camera_image
+
+
 while True:
     if agent.done():
         print("The target has been reached, stopping the simulation")
         break
 
     ego_vehicle.apply_control(agent.run_step())
-    if len(annotated_image_queue) != 0:
+    if not camera_image_queue.empty():
+        camera_image = camera_image_queue.get()
+        detections_bbox, annotated_camera_image = obj_detector.detect(camera_image)
+        junction_bbox = junction_annotator.annotate()
+        state_extractor.check_overlap(detections_bbox, junction_bbox)
+        if junction_bbox is not None:
+            annotated_camera_image = annotatate_with_junction(annotated_camera_image, junction_bbox)
+        cv2.imshow('Annotated Images',annotated_camera_image)
+        if cv2.waitKey(1) == ord('q'):
+            break
         # cv2.imshow("annotated images", annotated_image_queue.pop())
-        cv2.imwrite(f"./recording/{count}.png", annotated_image_queue.pop())
+        # cv2.imwrite(f"./recording/{count}.png", annotated_image_queue.pop())
         count += 1
-        print(len(annotated_image_queue))
     world.tick()
+sensor.destroy()
 
