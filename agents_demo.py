@@ -20,7 +20,7 @@ def process_img(image):
     # Convert the image from CARLA format to an OpenCV image (RGB)
     img0 = np.array(image.raw_data).reshape((image.height, image.width, 4))
     img0 = img0[:, :, :3]
-    annotated_image = obj_detector.detect(img0)
+    _, annotated_image = obj_detector.detect(img0)
     annotated_image_queue.append(annotated_image)
     
 
@@ -87,5 +87,6 @@ while True:
         # cv2.imshow("annotated images", annotated_image_queue.pop())
         cv2.imwrite(f"./recording/{count}.png", annotated_image_queue.pop())
         count += 1
+        print(len(annotated_image_queue))
     world.tick()
 
