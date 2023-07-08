@@ -104,9 +104,14 @@ while True:
     ego_vehicle.apply_control(agent.run_step())
     if not camera_image_queue.empty():
         camera_image = camera_image_queue.get()
-        detections_bbox, annotated_camera_image = obj_detector.detect(camera_image)
+        detections, annotated_camera_image = obj_detector.detect(camera_image)
         junction_bbox = junction_annotator.annotate()
-        state_extractor.check_overlap(detections_bbox, junction_bbox)
+        # print(junction_bbox)
+        if junction_bbox is not None:
+            at_junction, distance_to_junction = state_extractor.check_overlap(detections, junction_bbox)
+            print(f"{at_junction}, {distance_to_junction}")
+        else:
+            distance_to_junction = "car not near junction yet"
         if junction_bbox is not None:
             annotated_camera_image = annotatate_with_junction(annotated_camera_image, junction_bbox)
         cv2.imshow('Annotated Images',annotated_camera_image)

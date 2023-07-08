@@ -159,8 +159,8 @@ class JunctionAnnotator:
         # bounding_box_3d.append(carla.Location(x=min_x, y=max_y, z=z))  # top-left corner
         bounding_box_3d.append(carla.Location(x=max_x, y=max_y, z=z))  
         bounding_box_3d.append(carla.Location(x=max_x, y=min_y, z=z)) 
-        bounding_box_3d.append(carla.Location(x=max_x-20, y=min_y, z=z)) 
-        bounding_box_3d.append(carla.Location(x=max_x-20, y=max_y, z=z))  
+        # bounding_box_3d.append(carla.Location(x=max_x-20, y=min_y, z=z)) 
+        # bounding_box_3d.append(carla.Location(x=max_x-20, y=max_y, z=z))  
 
         return bounding_box_3d
 
