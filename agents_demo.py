@@ -100,8 +100,7 @@ while True:
     if agent.done():
         print("The target has been reached, stopping the simulation")
         break
-
-    ego_vehicle.apply_control(agent.run_step())
+    at_junction = False
     if not camera_image_queue.empty():
         camera_image = camera_image_queue.get()
         detections, annotated_camera_image = obj_detector.detect(camera_image)
@@ -114,12 +113,13 @@ while True:
             distance_to_junction = "car not near junction yet"
         if junction_bbox is not None:
             annotated_camera_image = annotatate_with_junction(annotated_camera_image, junction_bbox)
-        cv2.imshow('Annotated Images',annotated_camera_image)
-        if cv2.waitKey(1) == ord('q'):
-            break
+        # cv2.imshow('Annotated Images',annotated_camera_image)
+        # if cv2.waitKey(1) == ord('q'):
+        #     break
         # cv2.imshow("annotated images", annotated_image_queue.pop())
         # cv2.imwrite(f"./recording/{count}.png", annotated_image_queue.pop())
         count += 1
+    ego_vehicle.apply_control(agent.run_step(non_ego_at_junction=at_junction))
     world.tick()
 sensor.destroy()
 

@@ -184,10 +184,13 @@ class RDDPSAgent(object):
         end_location = end_waypoint.transform.location
         return self._global_planner.trace_route(start_location, end_location)
 
-    def run_step(self):
+    def run_step(self, non_ego_at_junction=False):
 
         # self._update_information()
-
+        if non_ego_at_junction and self._ego_at_junction():
+            control = self._local_planner.run_step()
+            control = self.add_emergency_stop(control)
+            return control
         """Execute one step of navigation."""
         hazard_detected = False
 
@@ -210,11 +213,11 @@ class RDDPSAgent(object):
         if affected_by_tlight:
             hazard_detected = True
 
-        danger, speed, distance = self._detect_opposite_direction_vehicles(None)
+        # danger, speed, distance = self._detect_opposite_direction_vehicles(None)
         # print(f"{danger}, {speed}, {distance}")
         
-        if danger:
-            hazard_detected = True
+        # if danger:
+        #     hazard_detected = True
 
         control = self._local_planner.run_step()
         if hazard_detected:
@@ -393,6 +396,13 @@ class RDDPSAgent(object):
 
         return (False, None, -1)
     
+    def _ego_at_junction(self):
+        ego_wpt = self._map.get_waypoint(self._vehicle.get_location())
+        if not ego_wpt.is_junction:
+            # print("ego not at junction")
+            return False
+        else:
+            return True
 
     def _detect_opposite_direction_vehicles(self, vehicle_list=None):
         """
