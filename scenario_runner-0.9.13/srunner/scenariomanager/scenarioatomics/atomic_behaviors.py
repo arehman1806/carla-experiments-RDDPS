@@ -2571,7 +2571,7 @@ class ActorSource(AtomicBehavior):
     """
 
     def __init__(self, actor_type_list, transform, threshold, blackboard_queue_name,
-                 actor_limit=7, name="ActorSource"):
+                 actor_limit=6, name="ActorSource", actor_limit_new=7):
         """
         Setup class members
         """

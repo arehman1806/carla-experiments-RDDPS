@@ -231,7 +231,7 @@ def generate_target_waypoint_list(waypoint, turn=0):
     threshold = math.radians(0.1)
     plan = []
     while True:
-        wp_choice = waypoint.next(2)
+        wp_choice = waypoint.next(1)
         if len(wp_choice) > 1:
             reached_junction = True
             waypoint = choose_at_junction(waypoint, wp_choice, turn)

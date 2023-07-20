@@ -1,0 +1,6 @@
+<scenarios>
+    <scenario name="DatasetGenSurrogateModel_1" type="DatasetGenSurrogateModel" town="Town03">
+        <ego_vehicle x="-74.9" y="148.7" z="0.2" yaw="0" model="vehicle.lincoln.mkz_2017" />
+        <other_actor x="-84.3" y="119.4" z="0.0" yaw="180" model="vehicle.tesla.model3" />
+     </scenario>
+</scenarios>
