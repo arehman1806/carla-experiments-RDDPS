@@ -64,8 +64,8 @@ time.sleep(1)
 
 blueprint_library = world.get_blueprint_library()
 cam_bp = blueprint_library.find('sensor.camera.rgb')
-cam_bp.set_attribute('image_size_x', '640')
-cam_bp.set_attribute('image_size_y', '480')
+cam_bp.set_attribute('image_size_x', '1216')
+cam_bp.set_attribute('image_size_y', '1216')
 sensor_transform = carla.Transform(carla.Location(x=2.5, z=2))
 
 # spawn the sensor and attach to vehicle.
@@ -113,9 +113,9 @@ while True:
             distance_to_junction = "car not near junction yet"
         if junction_bbox is not None:
             annotated_camera_image = annotatate_with_junction(annotated_camera_image, junction_bbox)
-        # cv2.imshow('Annotated Images',annotated_camera_image)
-        # if cv2.waitKey(1) == ord('q'):
-        #     break
+        cv2.imshow('Annotated Images',annotated_camera_image)
+        if cv2.waitKey(1) == ord('q'):
+            break
         # cv2.imshow("annotated images", annotated_image_queue.pop())
         # cv2.imwrite(f"./recording/{count}.png", annotated_image_queue.pop())
         count += 1
