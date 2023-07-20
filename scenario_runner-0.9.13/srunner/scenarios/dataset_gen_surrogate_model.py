@@ -11,13 +11,15 @@ from srunner.scenariomanager.scenarioatomics.atomic_behaviors import (ActorTrans
                                                                       ActorDestroy,
                                                                       LaneChange,
                                                                       WaypointFollower,
-                                                                      Idle)
+                                                                      Idle,
+                                                                      ChangeWeather)
 from srunner.scenariomanager.scenarioatomics.atomic_criteria import CollisionTest
-from srunner.scenariomanager.scenarioatomics.atomic_trigger_conditions import InTriggerDistanceToVehicle, StandStill
+import srunner.scenariomanager.scenarioatomics.atomic_trigger_conditions as conditions
 from srunner.tools.scenario_helper import choose_at_junction
 from srunner.scenarios.basic_scenario import BasicScenario
 from srunner.tools.scenario_helper import get_waypoint_in_distance, generate_target_waypoint_list
 from srunner.tools.route_manipulation import interpolate_trajectory
+from srunner.scenariomanager.weather_sim import Weather, WeatherBehavior
 
 
 class DatasetGenSurrogateModel(BasicScenario):
@@ -62,7 +64,7 @@ class DatasetGenSurrogateModel(BasicScenario):
     def _initialize_actors(self, config):
         self._ego_vehicle.set_simulate_physics(enabled=False)
         self._traffic_light = CarlaDataProvider.get_next_traffic_light(self._ego_vehicle, False)
-        self._traffic_light.set_state(carla.TrafficLightState.Green)
+        self._traffic_light.set_state(carla.TrafficLightState.Red)
         self._traffic_light.set_green_time(1e9)
         ego_stop_pts = self._traffic_light.get_stop_waypoints()
         ego_new_tranform = carla.Transform(
@@ -104,6 +106,9 @@ class DatasetGenSurrogateModel(BasicScenario):
         self._other_spawn_points = self.generate_other_spawn_points(debug=True)
 
 
+    def _setup_scenario_trigger(self, config):
+        return conditions.WaitForTrafficLightState(self._traffic_light, carla.TrafficLightState.Green)
+    
 
     def _create_behavior(self):
         """
@@ -114,9 +119,22 @@ class DatasetGenSurrogateModel(BasicScenario):
         sequence = py_trees.composites.Sequence("Sequence Behavior")
 
         # Behavior tree
-        root = py_trees.composites.Parallel(
+        weather = py_trees.composites.Parallel(
             policy=py_trees.common.ParallelPolicy.SUCCESS_ON_ONE)
+        carla_weather = carla.WeatherParameters(
+            cloudiness=0.0,
+            precipitation=0.0,
+            sun_altitude_angle=90.0,
+            fog_density=50
+        )
+        weather_updater_bb = Weather(carla_weather=carla_weather)
         
+        weather.add_child(WeatherBehavior())
+        weather.add_child(ChangeWeather(weather_updater_bb))
+
+        
+        
+        sequence.add_child(weather)
         for actor in self.other_actors:
             for spawn_point in self._other_spawn_points:
                 sequence.add_child(ActorTransformSetter(actor, spawn_point, physics=False))
@@ -126,7 +144,7 @@ class DatasetGenSurrogateModel(BasicScenario):
         
         for actor in self.other_actors:
             sequence.add_child(ActorDestroy(actor))
-            
+
         return sequence
 
 

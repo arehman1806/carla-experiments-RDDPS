@@ -2,7 +2,9 @@
 import carla
 import random
 import time
+from agents.navigation.stand_still_agent import StandStillAgent
 from agents.navigation.rddps_agent import RDDPSAgent
+import py_trees
 # from agents.navigation.behavior_agent import BehaviorAgent
 import numpy as np
 import torch
@@ -73,7 +75,7 @@ sensor = world.spawn_actor(cam_bp, sensor_transform, attach_to=ego_vehicle)
 sensor.listen(lambda image: process_img(image))
 # sensor.listen(lambda image: image.save_to_disk(f"./recording/{image.frame}.png"))
 
-agent = RDDPSAgent(ego_vehicle)
+agent = StandStillAgent(ego_vehicle)
 destination = carla.Location(x=-77.6, y=60, z=0)
 agent.set_destination(destination)
 
@@ -96,6 +98,10 @@ def annotatate_with_junction(camera_image, bbox):
     return camera_image
 
 
+traffic_light = ego_vehicle.get_traffic_light()
+traffic_light.set_state(carla.TrafficLightState.Green)
+print("Triggered the light")
+
 while True:
     if agent.done():
         print("The target has been reached, stopping the simulation")
@@ -108,11 +114,12 @@ while True:
         # print(junction_bbox)
         if junction_bbox is not None:
             at_junction, distance_to_junction = state_extractor.check_overlap(detections, junction_bbox)
-            print(f"{at_junction}, {distance_to_junction}")
+            # print(f"{at_junction}, {distance_to_junction}")
         else:
             distance_to_junction = "car not near junction yet"
         if junction_bbox is not None:
-            annotated_camera_image = annotatate_with_junction(annotated_camera_image, junction_bbox)
+            pass
+            # annotated_camera_image = annotatate_with_junction(annotated_camera_image, junction_bbox)
         cv2.imshow('Annotated Images',annotated_camera_image)
         if cv2.waitKey(1) == ord('q'):
             break

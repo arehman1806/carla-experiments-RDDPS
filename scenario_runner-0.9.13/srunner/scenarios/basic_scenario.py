@@ -109,12 +109,12 @@ class BasicScenario(object):
         spectator = world.get_spectator()
         transform_vehicle = self.ego_vehicles[0].get_transform()
         spectator.set_transform(carla.Transform(transform_vehicle.location + carla.Location(z=10), carla.Rotation(pitch=-90)))
-        weather = carla.WeatherParameters(
-            cloudiness=0.0,
-            precipitation=0.0,
-            sun_altitude_angle=90.0
-        )
-        world.set_weather(weather)
+        # weather = carla.WeatherParameters(
+        #     cloudiness=0.0,
+        #     precipitation=0.0,
+        #     sun_altitude_angle=90.0
+        # )
+        # world.set_weather(weather)
 
     def _initialize_actors(self, config):
         """
