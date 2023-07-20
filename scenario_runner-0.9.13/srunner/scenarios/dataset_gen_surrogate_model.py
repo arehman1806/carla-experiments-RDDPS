@@ -8,6 +8,7 @@ from basic_scenario import BasicScenario
 from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
 from srunner.scenariomanager.scenarioatomics.atomic_behaviors import (ActorTransformSetter,
                                                                       StopVehicle,
+                                                                      ActorDestroy,
                                                                       LaneChange,
                                                                       WaypointFollower,
                                                                       Idle)
@@ -41,6 +42,11 @@ class DatasetGenSurrogateModel(BasicScenario):
         """
         Initialize all parameters required for NewScenario
         """
+        
+        self._world = world
+        
+        self._ego_vehicle = ego_vehicles[0]
+        
 
         # Call constructor of BasicScenario
         super(DatasetGenSurrogateModel, self).__init__(
@@ -51,9 +57,9 @@ class DatasetGenSurrogateModel(BasicScenario):
           debug_mode,
           criteria_enable=criteria_enable)
         
-        self._world = world
+
         
-        self._ego_vehicle = ego_vehicles[0]
+    def _initialize_actors(self, config):
         self._ego_vehicle.set_simulate_physics(enabled=False)
         self._traffic_light = CarlaDataProvider.get_next_traffic_light(self._ego_vehicle, False)
         self._traffic_light.set_state(carla.TrafficLightState.Green)
@@ -72,11 +78,6 @@ class DatasetGenSurrogateModel(BasicScenario):
         self._opp_stop_points = opp.get_stop_waypoints()
         
         self._active_other_vehicle = None
-        self._other_spawn_points = self.generate_other_spawn_points(debug=True)
-        
-
-        
-    def _initialize_actors(self, config):
 
         self._other_actor_reserve_locations = {}
 
@@ -99,6 +100,8 @@ class DatasetGenSurrogateModel(BasicScenario):
             
             self._other_actor_reserve_locations[vehicle.id] = transform
             z -= 5
+        
+        self._other_spawn_points = self.generate_other_spawn_points(debug=True)
 
 
 
@@ -108,14 +111,35 @@ class DatasetGenSurrogateModel(BasicScenario):
         the necassary data
         """
 
-        # create an actor source and an actor sink
+        sequence = py_trees.composites.Sequence("Sequence Behavior")
+
+        # Behavior tree
+        root = py_trees.composites.Parallel(
+            policy=py_trees.common.ParallelPolicy.SUCCESS_ON_ONE)
+        
+        for actor in self.other_actors:
+            for spawn_point in self._other_spawn_points:
+                sequence.add_child(ActorTransformSetter(actor, spawn_point, physics=False))
+            sequence.add_child(ActorTransformSetter(actor, self._other_actor_reserve_locations[actor.id], physics=False))
+
+        # sequence.add_child(root)
+        
+        for actor in self.other_actors:
+            sequence.add_child(ActorDestroy(actor))
+            
+        return sequence
 
 
     def _create_test_criteria(self):
         """
         Setup the evaluation criteria for NewScenario
         """
-        pass
+        criteria = []
+
+        collison_criteria = CollisionTest(self.ego_vehicles[0])
+        criteria.append(collison_criteria)
+
+        return criteria
 
     def get_previous_wps(self, until=100):
         ego_loc = self.other_actors[0].get_transform().location
