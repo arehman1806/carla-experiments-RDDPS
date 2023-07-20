@@ -51,27 +51,36 @@ class DatasetGenSurrogateModel(BasicScenario):
           debug_mode,
           criteria_enable=criteria_enable)
         
+        self._world = world
+        
         self._ego_vehicle = ego_vehicles[0]
         self._ego_vehicle.set_simulate_physics(enabled=False)
         self._traffic_light = CarlaDataProvider.get_next_traffic_light(self._ego_vehicle, False)
         self._traffic_light.set_state(carla.TrafficLightState.Green)
-        self._traffic_light.set_red_time(1e9)
+        self._traffic_light.set_green_time(1e9)
         ego_stop_pts = self._traffic_light.get_stop_waypoints()
-        print(f"length:{len(ego_stop_pts)}\n\n\n")
-        self._ego_vehicle.set_transform(ego_stop_pts[0].transform)
+        ego_new_tranform = carla.Transform(
+            carla.Location(ego_stop_pts[0].transform.location.x,
+                           ego_stop_pts[0].transform.location.y,
+                           ego_stop_pts[0].transform.location.z+1),
+            ego_stop_pts[0].transform.rotation
+        )
+        self._ego_vehicle.set_transform(ego_new_tranform)
+        self._ego_vehicle.set_simulate_physics(enabled=True)
         other_tls = CarlaDataProvider.annotate_trafficlight_in_group(self._traffic_light)
         opp = other_tls["opposite"][0]
-        opp_stop_points = opp.get_stop_waypoints()
-        print(f"length:{len(opp_stop_points)}\n\n\n")
-        self.other_actors[0].set_transform(opp_stop_points[0].transform)
-        self.simulate_random_wp_spawn(turn=-1)
-        self.simulate_random_wp_spawn()
-        self.other_actors[0].set_transform(opp_stop_points[1].transform)
-        self.simulate_random_wp_spawn()
-        self.simulate_random_wp_spawn(turn=1)
+        self._opp_stop_points = opp.get_stop_waypoints()
+        
+        self._active_other_vehicle = None
+        self._other_spawn_points = self.generate_other_spawn_points(debug=True)
+        
 
         
     def _initialize_actors(self, config):
+
+        self._other_actor_reserve_locations = {}
+
+        z = -5
 
         # add actors from xml file
         for actor in config.other_actors:
@@ -80,15 +89,27 @@ class DatasetGenSurrogateModel(BasicScenario):
                 raise Exception(f"Error adding other actor: {actor}")
             self.other_actors.append(vehicle)
             vehicle.set_simulate_physics(enabled=False)
-
-        # get the minimum x, maximum x, min y, and max y for spawning other vehicle
+            transform = carla.Transform(
+                carla.Location(vehicle.get_transform().location.x,
+                               vehicle.get_transform().location.y,
+                               z),
+                vehicle.get_transform().rotation
+            )
+            vehicle.set_transform(transform)
+            
+            self._other_actor_reserve_locations[vehicle.id] = transform
+            z -= 5
 
 
 
     def _create_behavior(self):
         """
-        Setup the behavior for NewScenario
+        Ideally this should spawn one of the other actors to a possible spawn location, take a picture, and record 
+        the necassary data
         """
+
+        # create an actor source and an actor sink
+
 
     def _create_test_criteria(self):
         """
@@ -96,41 +117,47 @@ class DatasetGenSurrogateModel(BasicScenario):
         """
         pass
 
-    def get_wps_from_stop_pt(self):
+    def get_previous_wps(self, until=100):
         ego_loc = self.other_actors[0].get_transform().location
         waypoint = CarlaDataProvider.get_map().get_waypoint(ego_loc)
 
         list_of_waypoints = []
-        for i in range(200):
+        for i in range(until):
             waypoint = waypoint.previous(1)[0]
             list_of_waypoints.append(waypoint)
+
         return list_of_waypoints
     
-    def simulate_random_wp_spawn(self, turn=0):
-        time.sleep(5)
-        ego_loc = self.other_actors[0].get_transform().location
-        waypoint = CarlaDataProvider.get_map().get_waypoint(ego_loc)
+    def generate_other_spawn_points(self, debug=False):
+        self._active_other_vehicle = self.other_actors[0]
+        possible_spawn_points = []
+        self.other_actors[0].set_transform(self._opp_stop_points[0].transform)
+        time.sleep(0.1)
+        possible_spawn_points.extend(self.generate_spawn_points_for_lane_and_turn(turn=-1, debug=debug))
+        possible_spawn_points.extend(self.generate_spawn_points_for_lane_and_turn(debug=debug))
+        self.other_actors[0].set_transform(self._opp_stop_points[1].transform)
+        time.sleep(0.1)
+        possible_spawn_points.extend(self.generate_spawn_points_for_lane_and_turn(debug=debug))
+        possible_spawn_points.extend(self.generate_spawn_points_for_lane_and_turn(turn=1, debug=debug))
+
+        self._active_other_vehicle.set_transform(self._other_actor_reserve_locations.get(self._active_other_vehicle.id))
+
+        return possible_spawn_points
+
+    def generate_spawn_points_for_lane_and_turn(self, turn=0, debug=False):
+        other_loc = self.other_actors[0].get_transform().location
+        waypoint = CarlaDataProvider.get_map().get_waypoint(other_loc)
+
         plan, _ = generate_target_waypoint_list(waypoint, turn)
-        
-        list_of_wps = []
-        for i in range(len(plan)):
-            list_of_wps.append(plan[i][0])
-        
-        _, route = interpolate_trajectory(CarlaDataProvider._world, list_of_wps, 1)
+        _, route = interpolate_trajectory(CarlaDataProvider._world, [point[0] for point in plan], 1)
+        possible_spawn_transforms = [point[0] for point in route]
+        prev_wps = self.get_previous_wps()
+        possible_spawn_transforms.extend([point.transform for point in prev_wps])
 
-        for i in range(len(route)):
-            CarlaDataProvider._world.debug.draw_string(route[i][0].location, 'O', draw_shadow=False,
-                                       color=carla.Color(r=0, g=0, b=255), life_time=120.0,
-                                       persistent_lines=True)
-        prev_wps = self.get_wps_from_stop_pt()
-        for wp in prev_wps:
-            CarlaDataProvider._world.debug.draw_string(wp.transform.location, 'O', draw_shadow=False,
-                                       color=carla.Color(r=255, g=0, b=0), life_time=120.0,
-                                       persistent_lines=True)
+        if debug:
+            for transform in possible_spawn_transforms:
+                CarlaDataProvider._world.debug.draw_string(transform.location, 'O', draw_shadow=False,
+                                        color=carla.Color(r=255, g=0, b=0), life_time=1e9,
+                                        persistent_lines=True)
 
-            
-        print(f"len of points: {len(route)}")
-
-        # for i in range(len(route)):
-        #     self.other_actors[0].set_transform(route[i][0])
-        #     time.sleep(1)
+        return possible_spawn_transforms
