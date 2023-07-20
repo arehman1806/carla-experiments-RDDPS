@@ -21,11 +21,6 @@ class JunctionAnnotator:
         self.ego_vehicle = ego_vehicle
 
         # get the camera sensor
-        camera_bp = blueprint_library.find('sensor.camera.rgb')
-        camera_bp.set_attribute('image_size_x', '640')
-        camera_bp.set_attribute('image_size_y', '480')
-        camera_bp.set_attribute('fov', '90')
-        camera_transform = carla.Transform(carla.Location(x=1.5, z=3))
         self.camera = camera
 
         # Get the attributes from the camera
