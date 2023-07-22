@@ -103,6 +103,7 @@ class DatasetGenSurrogateModel(BasicScenario):
             self._other_actor_reserve_locations[vehicle.id] = transform
             z -= 5
         
+        #TODO: previous points should extend until a junction
         self._other_spawn_points = self.generate_other_spawn_points(debug=True)
 
 

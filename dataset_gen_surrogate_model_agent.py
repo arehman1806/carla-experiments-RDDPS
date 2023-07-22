@@ -4,11 +4,13 @@ import random
 import time
 from agents.navigation.stand_still_agent import StandStillAgent
 from agents.navigation.rddps_agent import RDDPSAgent
+from scenario_runner.srunner.scenariomanager.carla_data_provider import CarlaDataProvider
 import py_trees
 # from agents.navigation.behavior_agent import BehaviorAgent
 import numpy as np
 import torch
 import cv2
+
 
 from queue import Queue
 
