@@ -184,7 +184,7 @@ class StandStillAgent(object):
         end_location = end_waypoint.transform.location
         return self._global_planner.trace_route(start_location, end_location)
 
-    def run_step(self, non_ego_at_junction=False):
+    def run_step(self):
         control = self._local_planner.run_step()
         control = self.add_emergency_stop(control)
 

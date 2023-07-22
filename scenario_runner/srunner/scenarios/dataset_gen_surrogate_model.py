@@ -90,6 +90,7 @@ class DatasetGenSurrogateModel(BasicScenario):
             vehicle = CarlaDataProvider.request_new_actor(actor.model, actor.transform)
             if vehicle is None:
                 raise Exception(f"Error adding other actor: {actor}")
+            vehicle.rolename = "idle"
             self.other_actors.append(vehicle)
             vehicle.set_simulate_physics(enabled=False)
             transform = carla.Transform(
@@ -103,7 +104,15 @@ class DatasetGenSurrogateModel(BasicScenario):
             self._other_actor_reserve_locations[vehicle.id] = transform
             z -= 5
         
-        #TODO: previous points should extend until a junction
+        blueprint_library = self._world.get_blueprint_library()
+        cam_bp = blueprint_library.find('sensor.camera.rgb')
+        cam_bp.set_attribute('image_size_x', '1216')
+        cam_bp.set_attribute('image_size_y', '1216')
+        sensor_transform = carla.Transform(carla.Location(x=2.5, z=2))
+        sensor = self._world.spawn_actor(cam_bp, sensor_transform, attach_to=self._ego_vehicle)
+        CarlaDataProvider.register_actor(sensor)
+        
+        
         self._other_spawn_points = self.generate_other_spawn_points(debug=True)
 
 
@@ -126,7 +135,7 @@ class DatasetGenSurrogateModel(BasicScenario):
             cloudiness=0.0,
             precipitation=0.0,
             sun_altitude_angle=90.0,
-            fog_density=50
+            fog_density=0
         )
         weather_updater_bb = Weather(carla_weather=carla_weather)
         
@@ -137,8 +146,10 @@ class DatasetGenSurrogateModel(BasicScenario):
         
         sequence.add_child(weather)
         for actor in self.other_actors:
+            actor.rolename = "abc"
             for spawn_point in self._other_spawn_points:
                 sequence.add_child(ActorTransformSetter(actor, spawn_point, physics=False))
+            actor.attributes["role_name"] = "idle"
             sequence.add_child(ActorTransformSetter(actor, self._other_actor_reserve_locations[actor.id], physics=False))
 
         # sequence.add_child(root)
@@ -163,11 +174,11 @@ class DatasetGenSurrogateModel(BasicScenario):
     def get_previous_wps(self, until=100):
         ego_loc = self.other_actors[0].get_transform().location
         waypoint = CarlaDataProvider.get_map().get_waypoint(ego_loc)
-
-        list_of_waypoints = []
-        for i in range(until):
-            waypoint = waypoint.previous(1)[0]
-            list_of_waypoints.append(waypoint)
+        list_of_waypoints = waypoint.previous_until_lane_start(1)[:-1]
+        # list_of_waypoints = []
+        # for i in range(until):
+        #     waypoint = waypoint.previous(1)[0]
+        #     list_of_waypoints.append(waypoint)
 
         return list_of_waypoints
     
