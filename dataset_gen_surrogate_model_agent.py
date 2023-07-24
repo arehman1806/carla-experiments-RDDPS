@@ -312,9 +312,9 @@ class DatasetGenSurrogateModel:
                 else:
                     iou = 0
                 if (previous_at_junction and iou > 0.05) or iou > 0.5:
-                    has_detected = True
+                    has_detected = 1
                 else:
-                    has_detected = False
+                    has_detected = 0
                 data.append({"at_junction": previous_at_junction, "distance_to_junction": previous_distance_to_junction, "has_detected": has_detected})
                 print(f"IOU: {iou}")
                 self.draw_bb_on_image(previous_xyxy, annotated_camera_image)
