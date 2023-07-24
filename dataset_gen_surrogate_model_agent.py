@@ -16,6 +16,9 @@ from state_extractor import StateExtractor
 from yolov7_carla_object_detection.carla_detect import CarlaObjectDetector
 from typing import List, Tuple
 from collections import deque
+import copy
+import csv
+import os
 
 
 class DatasetGenSurrogateModel:
@@ -49,19 +52,27 @@ class DatasetGenSurrogateModel:
         cam_bp.set_attribute('image_size_x', '1216')
         cam_bp.set_attribute('image_size_y', '1216')
         sensor_transform = carla.Transform(carla.Location(x=2.5, z=2))
-        # self.sensor = self.world.spawn_actor(cam_bp, sensor_transform, attach_to=self.ego_vehicle)
-        self.sensor = self.world.get_actors().filter("sensor.camera.rgb")[0]
+        self.sensor = self.world.spawn_actor(cam_bp, sensor_transform, attach_to=self.ego_vehicle)
+        # self.sensor = self.world.get_actors().filter("sensor.camera.rgb")[0]
         self.sensor.listen(lambda image: self.process_img(image))
 
+        # Get the attributes from the camera
+        image_w = cam_bp.get_attribute("image_size_x").as_int()
+        image_h = cam_bp.get_attribute("image_size_y").as_int()
+        fov = cam_bp.get_attribute("fov").as_float()
+
+        # Calculate the camera projection matrix to project from 3D -> 2D
+        self.K = self.build_projection_matrix(image_w, image_h, fov)
+        self.current_camera_image = None
 
         CarlaDataProvider.set_client(self.client)
         CarlaDataProvider.set_world(self.world)
         # Wait for the world to be ready
-        if CarlaDataProvider.is_sync_mode():
-            self.dummy_tick = True
-            self.world.tick()
-        else:
-            self.world.wait_for_tick()
+        # if CarlaDataProvider.is_sync_mode():
+        #     self.dummy_tick = True
+        #     self.world.tick()
+        # else:
+        #     self.world.wait_for_tick()
 
         self.ego_traffic_light, self.op_traffic_light = self.get_traffic_lights()
         affected_waypoints = self.op_traffic_light.get_affected_lane_waypoints()
@@ -96,6 +107,8 @@ class DatasetGenSurrogateModel:
         img0 = np.array(image.raw_data).reshape((image.height, image.width, 4))
         img0 = img0[:, :, :3]
         self.camera_image_queue.append(np.array(img0))
+        self.current_camera_image = img0
+        print(f"{self.world.get_snapshot().frame}, {image.frame}")
 
     def get_traffic_lights(self) -> Tuple[carla.TrafficLight, carla.TrafficLight]:
         ego_light = self.ego_vehicle.get_traffic_light()
@@ -150,20 +163,94 @@ class DatasetGenSurrogateModel:
         distance = other_vehicle_loc.distance(self.junction_loc)
         return at_junction, distance
     
+    def has_detected(self, detections, bb, img=None):
+        # Get the camera matrix 
+        world_2_camera = np.array(self.sensor.get_transform().get_inverse_matrix())
+        # bb = self.previous_activate_scenario_vehicle.bounding_box
+        # p1 = self.get_image_point(bb.location, self.K, world_2_camera)
+        verts = [v for v in bb.get_world_vertices(self.active_scenario_vehicle.get_transform())]
+        x_max = -10000
+        x_min = 10000
+        y_max = -10000
+        y_min = 10000
+
+        for vert in verts:
+            p = self.get_image_point(vert, self.K, world_2_camera)
+            # Find the rightmost vertex
+            if p[0] > x_max:
+                x_max = p[0]
+            # Find the leftmost vertex
+            if p[0] < x_min:
+                x_min = p[0]
+            # Find the highest vertex
+            if p[1] > y_max:
+                y_max = p[1]
+            # Find the lowest  vertex
+            if p[1] < y_min:
+                y_min = p[1]
+        if img is not None:
+            cv2.line(img, (int(x_min),int(y_min)), (int(x_max),int(y_min)), (0,0,255, 255), 1)
+            cv2.line(img, (int(x_min),int(y_max)), (int(x_max),int(y_max)), (0,0,255, 255), 1)
+            cv2.line(img, (int(x_min),int(y_min)), (int(x_min),int(y_max)), (0,0,255, 255), 1)
+            cv2.line(img, (int(x_max),int(y_min)), (int(x_max),int(y_max)), (0,0,255, 255), 1)
+
+        
+
+
+    def build_projection_matrix(self, w, h, fov):
+        focal = w / (2.0 * np.tan(fov * np.pi / 360.0))
+        K = np.identity(3)
+        K[0, 0] = K[1, 1] = focal
+        K[0, 2] = w / 2.0
+        K[1, 2] = h / 2.0
+        return K
+    
+    def get_image_point(self, loc, K, w2c):
+        # Calculate 2D projection of 3D coordinate
+
+        # Format the input coordinate (loc is a carla.Position object)
+        point = np.array([loc.x, loc.y, loc.z, 1])
+        # transform to camera coordinates
+        point_camera = np.dot(w2c, point)
+
+        # New we must change from UE4's coordinate system to an "standard"
+        # (x, y ,z) -> (y, -z, x)
+        # and we remove the fourth componebonent also
+        point_camera = [point_camera[1], -point_camera[2], point_camera[0]]
+
+        # now project 3D->2D using the camera matrix
+        point_img = np.dot(K, point_camera)
+        # normalize
+        point_img[0] /= point_img[2]
+        point_img[1] /= point_img[2]
+
+        return point_img[0:2]
+
+    def intersection(self, a,b):
+        x = max(a[0], b[0])
+        y = max(a[1], b[1])
+        w = min(a[0]+a[2], b[0]+b[2]) - x
+        h = min(a[1]+a[3], b[1]+b[3]) - y
+        if w<0 or h<0: return () # or (0,0,0,0) ?
+        return (x, y, w, h)
+    
+    def save_to_csv(self, filename, data_list):
+        headers = ['at_junction', 'distance_to_junction', 'has_detected']
+        with open(filename, 'w') as csvfile:
+            writer = csv.DictWriter(csvfile, delimiter=',', lineterminator='\n', fieldnames=headers)
+            writer.writeheader()
+            for data in data_list:
+                writer.writerow(data)
 
     def start_data_collection(self):
+        data = []
         # Setting the light to green is the trigger for scenario. See DatasetGenSurrogateModel scenario
         self.ego_traffic_light.set_state(carla.TrafficLightState.Green)
         print("Triggered the light")
-        # self.dummy_tick = True
-        # self.world.tick()
-        # self.world.tick()
-        # while self.camera_image_queue.empty():
-        #     self.world.tick()
-        #     time.sleep(0.1)
-        #     print("empty queue. ticking world")
-
         count = 0
+        previous_at_junction, previous_distance_to_junction = True, 0
+        previous_bb = carla.BoundingBox()
+
         while True:
             # while self.camera_image_queue.qsize() > 1:
             #     self.camera_image_queue.get()
@@ -181,9 +268,11 @@ class DatasetGenSurrogateModel:
             if not len(self.camera_image_queue) == 0:
                 camera_image = self.camera_image_queue.pop()
                 detections, annotated_camera_image = self.obj_detector.detect(camera_image)
-                # junction_bbox = self.junction_annotator.annotate()
-                # print(junction_bbox)
-                at_junction, distance_to_junction = self.get_state()
+
+                at_junction, distance_to_junction = copy.copy(previous_at_junction), copy.copy(previous_distance_to_junction)
+                previous_at_junction, previous_distance_to_junction = self.get_state()
+                self.has_detected([], previous_bb, annotated_camera_image)
+                previous_bb = self.active_scenario_vehicle.bounding_box
                 # print(f"{at_junction}, {distance_to_junction}")
                 text = f"At Junction: {at_junction}, Distance to Junction: {distance_to_junction}"
                 cv2.putText(annotated_camera_image, text, (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)

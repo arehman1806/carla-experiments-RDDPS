@@ -37,10 +37,10 @@ class DatasetGenSurrogateModel(BasicScenario):
     # some ego vehicle parameters
     # some parameters for the other vehicles
 
-    timeout = 1200
+    timeout = 12000000
 
     def __init__(self, world, ego_vehicles, config, randomize=False, debug_mode=False, criteria_enable=True,
-                 timeout=600):
+                 timeout=6000000):
         """
         Initialize all parameters required for NewScenario
         """
@@ -104,13 +104,13 @@ class DatasetGenSurrogateModel(BasicScenario):
             self._other_actor_reserve_locations[vehicle.id] = transform
             z -= 5
         
-        blueprint_library = self._world.get_blueprint_library()
-        cam_bp = blueprint_library.find('sensor.camera.rgb')
-        cam_bp.set_attribute('image_size_x', '1216')
-        cam_bp.set_attribute('image_size_y', '1216')
-        sensor_transform = carla.Transform(carla.Location(x=2.5, z=2))
-        sensor = self._world.spawn_actor(cam_bp, sensor_transform, attach_to=self._ego_vehicle)
-        CarlaDataProvider.register_actor(sensor)
+        # blueprint_library = self._world.get_blueprint_library()
+        # cam_bp = blueprint_library.find('sensor.camera.rgb')
+        # cam_bp.set_attribute('image_size_x', '1216')
+        # cam_bp.set_attribute('image_size_y', '1216')
+        # sensor_transform = carla.Transform(carla.Location(x=2.5, z=2))
+        # sensor = self._world.spawn_actor(cam_bp, sensor_transform, attach_to=self._ego_vehicle)
+        # CarlaDataProvider.register_actor(sensor)
         
         
         self._other_spawn_points = self.generate_other_spawn_points(debug=True)
