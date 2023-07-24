@@ -174,7 +174,7 @@ class DatasetGenSurrogateModel(BasicScenario):
     def get_previous_wps(self, until=100):
         ego_loc = self.other_actors[0].get_transform().location
         waypoint = CarlaDataProvider.get_map().get_waypoint(ego_loc)
-        list_of_waypoints = waypoint.previous_until_lane_start(1)[:-1]
+        list_of_waypoints = waypoint.previous_until_lane_start(1)[:-3]
         # list_of_waypoints = []
         # for i in range(until):
         #     waypoint = waypoint.previous(1)[0]
@@ -201,9 +201,13 @@ class DatasetGenSurrogateModel(BasicScenario):
     def generate_spawn_points_for_lane_and_turn(self, turn=0, debug=False):
         other_loc = self.other_actors[0].get_transform().location
         waypoint = CarlaDataProvider.get_map().get_waypoint(other_loc)
+        if turn == 0:
+            until = -6
+        else:
+            until = -6
 
         plan, _ = generate_target_waypoint_list(waypoint, turn)
-        _, route = interpolate_trajectory(CarlaDataProvider._world, [point[0] for point in plan], 1)
+        _, route = interpolate_trajectory(CarlaDataProvider._world, [point[0] for point in plan[:until]], 1)
         possible_spawn_transforms = [point[0] for point in route]
         prev_wps = self.get_previous_wps()
         possible_spawn_transforms.extend([point.transform for point in prev_wps])

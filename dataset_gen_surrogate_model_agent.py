@@ -29,14 +29,9 @@ class DatasetGenSurrogateModel:
         self.client.set_timeout(10.0)  # seconds
         # Get the world
         self.world = self.client.get_world()
-        # Set the world in synchronous mode
-        settings = self.world.get_settings()
-        settings.synchronous_mode = True
-        settings.fixed_delta_seconds = 0.05  # 0.05 seconds (20 FPS)
-        self.world.apply_settings(settings)
 
         self.map = self.world.get_map()
-        self.dummy_tick = True
+        self.dummy_tick = False
 
 
         self.camera_image_queue = deque()
@@ -96,6 +91,12 @@ class DatasetGenSurrogateModel:
         self.state_extractor = StateExtractor()
 
         self.count = 0
+
+        # Set the world in synchronous mode
+        settings = self.world.get_settings()
+        settings.synchronous_mode = True
+        settings.fixed_delta_seconds = 0.05  # 0.05 seconds (20 FPS)
+        self.world.apply_settings(settings)
     
     
     
@@ -108,7 +109,7 @@ class DatasetGenSurrogateModel:
         img0 = img0[:, :, :3]
         self.camera_image_queue.append(np.array(img0))
         self.current_camera_image = img0
-        print(f"{self.world.get_snapshot().frame}, {image.frame}")
+        # print(f"{self.world.get_snapshot().frame}, {image.frame}")
 
     def get_traffic_lights(self) -> Tuple[carla.TrafficLight, carla.TrafficLight]:
         ego_light = self.ego_vehicle.get_traffic_light()
@@ -163,10 +164,10 @@ class DatasetGenSurrogateModel:
         distance = other_vehicle_loc.distance(self.junction_loc)
         return at_junction, distance
     
-    def has_detected(self, detections, bb, img=None):
+    def get_ground_truth(self):
         # Get the camera matrix 
         world_2_camera = np.array(self.sensor.get_transform().get_inverse_matrix())
-        # bb = self.previous_activate_scenario_vehicle.bounding_box
+        bb = self.active_scenario_vehicle.bounding_box
         # p1 = self.get_image_point(bb.location, self.K, world_2_camera)
         verts = [v for v in bb.get_world_vertices(self.active_scenario_vehicle.get_transform())]
         x_max = -10000
@@ -188,14 +189,15 @@ class DatasetGenSurrogateModel:
             # Find the lowest  vertex
             if p[1] < y_min:
                 y_min = p[1]
-        if img is not None:
-            cv2.line(img, (int(x_min),int(y_min)), (int(x_max),int(y_min)), (0,0,255, 255), 1)
-            cv2.line(img, (int(x_min),int(y_max)), (int(x_max),int(y_max)), (0,0,255, 255), 1)
-            cv2.line(img, (int(x_min),int(y_min)), (int(x_min),int(y_max)), (0,0,255, 255), 1)
-            cv2.line(img, (int(x_max),int(y_min)), (int(x_max),int(y_max)), (0,0,255, 255), 1)
+        return (x_min, y_min, x_max, y_max)
 
-        
 
+    def draw_bb_on_image(self, xyxy, img):
+        x_min, y_min, x_max, y_max = xyxy
+        cv2.line(img, (int(x_min),int(y_min)), (int(x_max),int(y_min)), (0,0,255, 255), 1)
+        cv2.line(img, (int(x_min),int(y_max)), (int(x_max),int(y_max)), (0,0,255, 255), 1)
+        cv2.line(img, (int(x_min),int(y_min)), (int(x_min),int(y_max)), (0,0,255, 255), 1)
+        cv2.line(img, (int(x_max),int(y_min)), (int(x_max),int(y_max)), (0,0,255, 255), 1)
 
     def build_projection_matrix(self, w, h, fov):
         focal = w / (2.0 * np.tan(fov * np.pi / 360.0))
@@ -226,19 +228,56 @@ class DatasetGenSurrogateModel:
 
         return point_img[0:2]
 
-    def intersection(self, a,b):
-        x = max(a[0], b[0])
-        y = max(a[1], b[1])
-        w = min(a[0]+a[2], b[0]+b[2]) - x
-        h = min(a[1]+a[3], b[1]+b[3]) - y
-        if w<0 or h<0: return () # or (0,0,0,0) ?
-        return (x, y, w, h)
+    def calculate_iou(self, bb1, bb2):
+        """
+        Calculate the Intersection over Union (IoU) of two bounding boxes.
+
+        Parameters:
+        bb1 (tuple): A bounding box represented by a 4-tuple (xmin, ymin, xmax, ymax).
+        bb2 (tuple): A bounding box represented by a 4-tuple (xmin, ymin, xmax, ymax).
+
+        Returns:
+        float: The IoU ratio.
+        """
+
+        assert bb1[0] < bb1[2]
+        assert bb1[1] < bb1[3]
+        assert bb2[0] < bb2[2]
+        assert bb2[1] < bb2[3]
+
+        # determine the coordinates of the intersection rectangle
+        x_left = max(bb1[0], bb2[0])
+        y_top = max(bb1[1], bb2[1])
+        x_right = min(bb1[2], bb2[2])
+        y_bottom = min(bb1[3], bb2[3])
+
+        if x_right < x_left or y_bottom < y_top:
+            return 0.0
+
+        # The intersection of two axis-aligned bounding boxes is always an
+        # axis-aligned bounding box
+        intersection_area = (x_right - x_left) * (y_bottom - y_top)
+
+        # compute the area of both AABBs
+        bb1_area = (bb1[2] - bb1[0]) * (bb1[3] - bb1[1])
+        bb2_area = (bb2[2] - bb2[0]) * (bb2[3] - bb2[1])
+
+        # compute the intersection over union by taking the intersection
+        # area and dividing it by the sum of prediction + ground-truth
+        # areas - the intersection area
+        iou = intersection_area / float(bb1_area + bb2_area - intersection_area)
+        assert iou >= 0.0
+        assert iou <= 1.0
+        return iou
+
     
     def save_to_csv(self, filename, data_list):
+        file_exists = os.path.isfile(filename)
         headers = ['at_junction', 'distance_to_junction', 'has_detected']
-        with open(filename, 'w') as csvfile:
+        with open(filename, 'a') as csvfile:
             writer = csv.DictWriter(csvfile, delimiter=',', lineterminator='\n', fieldnames=headers)
-            writer.writeheader()
+            if not file_exists:
+                writer.writeheader()
             for data in data_list:
                 writer.writerow(data)
 
@@ -249,7 +288,7 @@ class DatasetGenSurrogateModel:
         print("Triggered the light")
         count = 0
         previous_at_junction, previous_distance_to_junction = True, 0
-        previous_bb = carla.BoundingBox()
+        previous_xyxy = (0,0,0,0)
 
         while True:
             # while self.camera_image_queue.qsize() > 1:
@@ -268,13 +307,19 @@ class DatasetGenSurrogateModel:
             if not len(self.camera_image_queue) == 0:
                 camera_image = self.camera_image_queue.pop()
                 detections, annotated_camera_image = self.obj_detector.detect(camera_image)
-
-                at_junction, distance_to_junction = copy.copy(previous_at_junction), copy.copy(previous_distance_to_junction)
-                previous_at_junction, previous_distance_to_junction = self.get_state()
-                self.has_detected([], previous_bb, annotated_camera_image)
-                previous_bb = self.active_scenario_vehicle.bounding_box
+                if len(detections) > 0:
+                    iou = self.calculate_iou(detections[0], previous_xyxy)
+                else:
+                    iou = 0
+                if (previous_at_junction and iou > 0.05) or iou > 0.5:
+                    has_detected = True
+                else:
+                    has_detected = False
+                data.append({"at_junction": previous_at_junction, "distance_to_junction": previous_distance_to_junction, "has_detected": has_detected})
+                print(f"IOU: {iou}")
+                self.draw_bb_on_image(previous_xyxy, annotated_camera_image)
                 # print(f"{at_junction}, {distance_to_junction}")
-                text = f"At Junction: {at_junction}, Distance to Junction: {distance_to_junction}"
+                text = f"At Junction: {previous_at_junction}, Distance to Junction: {previous_distance_to_junction}, IOU: {iou}"
                 cv2.putText(annotated_camera_image, text, (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
                 active_loc = self.active_scenario_vehicle.get_location()
                 text2 = f"loc: {active_loc.x}, {active_loc.y}, {active_loc.z}"
@@ -285,10 +330,15 @@ class DatasetGenSurrogateModel:
                 # cv2.imshow("annotated images", annotated_image_queue.pop())
                 cv2.imwrite(f"./recording/{count}.png", annotated_camera_image)
                 count += 1
+                previous_at_junction, previous_distance_to_junction = self.get_state()
+                previous_xyxy = self.get_ground_truth()
             else:
                 print("empty queue")
             self.ego_vehicle.apply_control(self.agent.run_step())
             self.world.tick()
+            if len(data) > 10:
+                self.save_to_csv("scenario_1.csv", data)
+                data = []
             # time.sleep(0.1)
         self.sensor.destroy()
     
