@@ -108,7 +108,7 @@ struct NaiveControlPolicy <: Policy
     𝒜
 end
 
-function NaivePolicy()
+function NaiveControlPolicy()
     return NaiveControlPolicy([0, 1])
 end
 
