@@ -38,8 +38,7 @@ function POMDPs.transition(mdp::SignalizedJunctionTurnLeftMDP, s, a, x, rng::Abs
     if (a == 1 || not_detected)
         ego_distance -= mdp.speed_limit * mdp.dt
     end
-
-    return Deterministic(Float32[ego_distance, actor_distace])
+    return SparseCat([Float32[ego_distance, actor_distace]], [1])
     # a = x == 0 ? 0.0 : a # COC if don't detect
 
     # h, dh, a_prev, τ = s
@@ -108,13 +107,13 @@ struct NaiveControlPolicy <: Policy
     𝒜
 end
 
-function NaiveControlPolicy()
+function GetNaivePolicy()
     return NaiveControlPolicy([0, 1])
 end
 
 function POMDPs.action(Policy:: NaiveControlPolicy, s)
     ego_distance, actor_distance = s
-    action = actor_distance < 50 ? 0 : :stop
+    action = (actor_distance < 50 && actor_distance > 0) ? 0 : 1
     return action
 end
 

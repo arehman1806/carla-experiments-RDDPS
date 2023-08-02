@@ -1,3 +1,99 @@
-using POMDP, POMDPGym, Distributions, Random, GridInterpolations
+using POMDPs, POMDPGym, Crux, Distributions, Random, GridInterpolations, POMDPTools
 using StatsBase
+using Plots
+
+include("./risk_mdp.jl")
+include("signalized_junction_turn_left_mdp.jl")
+include("./risk_solvers.jl")
+
+env = SignalizedJunctionTurnLeftMDP(safety_threshold=15, speed_limit=40.0, yield_threshold=60.0, reward_safety_violation=-100, dt=0.1, distance_junction=30, 
+        ego_distance0=Deterministic(20), actor_distance0=Distributions.Uniform(10, 80))
+
+distance_actor_max = 100
+all_distance_actor = sort(distance_actor_max .- (collect(range(0, stop=distance_actor_max^(1/0.5), length=40))).^0.5)
+all_distance_ego = collect(range(0, 30, 40))
+all_distance_ego = collect(range(0, 30, 40))
+
+display(scatter(all_distance_actor, zeros(length(all_distance_actor))))
+
+policy = GetNaivePolicy()
+
+display(heatmap(all_distance_ego, all_distance_actor, (distance_ego, distance_actor) -> action(policy, [distance_ego, distance_actor]), xlabel="τ (s)", ylabel="h (m)", title="CAS Policy"))
+# costfn(m, s, sp) = isterminal(m, sp) ? abs(s[1]) : 0.0
+function costfn(m, s, sp)
+    if isfailure(m, sp)
+        # High cost for safety violation
+        return 80.0
+    elseif isterminal(m, sp)
+        # Lower cost for successful turn
+        return 40.0
+    else
+        # No cost otherwise
+        return 0.0
+    end
+end
+rmdp = RMDP(env, policy, costfn, false, 1.0, 40.0, :both)
+
+function p_detect(s)
+    distance_ego, distance_actor = s
+    # clip the distance_actor to be within 20 and 100
+    distance_actor = max(min(distance_actor, 100), 20)
+    # Linear interpolation between 20 and 100.
+    # pd will be 1 when distance_actor is 20, and 0 when it's 100.
+    pd = (100 - distance_actor) / 80.0
+    return pd
+end
+display(heatmap(all_distance_ego, all_distance_actor, (ego_distance, actor_distance)->p_detect([ego_distance, actor_distance])))
+function get_detect_dist(s)
+    pd = p_detect(s)
+    noises = [[ϵ, 0.0, 0.0] for ϵ in [0, 1]]
+    return ObjectCategorical(noises, [1 - pd, pd])
+end
+
+noises_detect = [0, 1]
+
+ϵ_grid = RectangleGrid(noises_detect)
+noises = [[ϵ[1], 0.0, 0.0] for ϵ in ϵ_grid]
+#probs = probs_detect # NOTE: will need to change once also have additive noise
+
+px = StateDependentDistributionPolicy(get_detect_dist, DiscreteSpace(noises))
+
+# Get the distribution of returns and plot
+N = 1000
+D = episodes!(Sampler(rmdp, px), Neps=N)
+samples = D[:r][1, D[:episode_end][:]]
+
+p1 = histogram(samples, title="CAS Costs", bins=range(0, 81, 30), normalize=true, alpha=0.3, xlabel="cost", label="MC")
+
+print(length(samples))
+
+display(p1)
+
+# Set up cost points, state grid, and other necessary data
+cost_points = collect(range(0, 100, 50))
+s_grid = RectangleGrid(all_distance_ego, all_distance_actor)
+𝒮 = [[distance_ego, distance_actor] for distance_ego in all_distance_ego, distance_actor in all_distance_actor];
+s2pt(s) = s
+
+# Solve for distribution over costs
+@time Uw, Qw = solve_cvar_fixed_particle(rmdp, px, s_grid, 𝒮, s2pt,
+    cost_points, mdp_type=:exp);
+
+# Grab the initial state
+si, wi = GridInterpolations.interpolants(s_grid, s2pt([30, 90]))
+si = si[argmax(wi)]
+println(cost_points)
+println(Uw[si])
+p2 = histogram!(cost_points, weights=Uw[si], bins=range(0, 100, 50), normalize=true, alpha=0.4, label="DP")
+display(p2)
+# # Create CVaR convenience functions
+# CVaR(s, ϵ, α) = CVaR(s, ϵ, s_grid, ϵ_grid, Qw, cost_points; alphaa=α)
+
+# # Plot one sample
+# # heatmap(τs, hs, (x, y) -> CVaR([y, 0.0, 0.0, x], [0], 0.0), title="α = 0")
+
+# anim = @animate for α in range(-1.0, 1.0, length=51)
+#     heatmap(all_distance_ego, all_distance_actor, (x, y) -> CVaR([x, y], [0], α), title="CVaR (α = $α)", clims=(0, 150), xlabel="τ (s)", ylabel="h (m)")
+# end
+# Plots.gif(anim, "./risk_function/figures/daa_CVaR_v3.gif", fps=6)
 
