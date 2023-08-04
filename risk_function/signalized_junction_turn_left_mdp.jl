@@ -2,24 +2,22 @@ using Distributions, Parameters, Random
 using POMDPTools, POMDPGym, POMDPs
 
 @with_kw struct SignalizedJunctionTurnLeftMDP <: MDP{Array{Float32},Float32}
-    safety_threshold::Float64 = 15..0 # if the ego_vehicle is inside the junction while non ego is 20m away, this will be considered a safety violation
+    safety_threshold::Float64 = 15.0 # if the ego_vehicle is inside the junction while non ego is 20m away, this will be considered a safety violation
     speed_limit::Float64 = 40.0 # applies to both ego vehicle and other actors.
     yield_threshold::Float64 = 50.0 # if the oncoming traffic < yield_threshold away, yield!
     actions = [0, 1]
     reward_safety_violation = -100
     dt = 0.1 # the time step
-
-    distance_junction::Float64 = 30.0 # distance ego vehicle has to travel to successfully complete the task.
     ego_distance0 = Deterministic(distance_junction) # distance travelled by ego vehicle
     actor_distance0 = Distributions.Uniform(10, 100)
 
 #--------------------------------------------------------------------------------------------------#
 
-    ddh_max::Float64 = 1.0 # vertical acceleration limit [m/s²]
-    collision_threshold::Float64 = 50.0 # collision threshold [m]
-    reward_collision::Float64 = -100.0 # reward obtained if collision occurs
-    reward_change::Float64 = -1 # reward obtained if action changes
-    px = DiscreteNonParametric([2.0, 0.0, -2.0], [0.25, 0.5, 0.25])
+    # ddh_max::Float64 = 1.0 # vertical acceleration limit [m/s²]
+    # collision_threshold::Float64 = 50.0 # collision threshold [m]
+    # reward_collision::Float64 = -100.0 # reward obtained if collision occurs
+    # reward_change::Float64 = -1 # reward obtained if action changes
+    # px = DiscreteNonParametric([2.0, 0.0, -2.0], [0.25, 0.5, 0.25])
 #---------------------------------------------------------------------------------------------------#
 end
 
@@ -35,26 +33,15 @@ function POMDPs.transition(mdp::SignalizedJunctionTurnLeftMDP, s, a, x, rng::Abs
     ego_distance, actor_distace = s
 
     actor_distace -= mdp.speed_limit * mdp.dt
+    print("actor position ")
+    println(actor_distace)
     if (a == 1 || not_detected)
         ego_distance -= mdp.speed_limit * mdp.dt
+        print("ego position ")
+        println(ego_distance)
     end
     return SparseCat([Float32[ego_distance, actor_distace]], [1])
     # a = x == 0 ? 0.0 : a # COC if don't detect
-
-    # h, dh, a_prev, τ = s
-
-    # # Update the dynamics
-    # h = h + dh
-    # #if a != 0.0
-    # if abs(a - dh) < mdp.ddh_max
-    #     dh += a - dh
-    # else
-    #     dh += sign(a - dh) * mdp.ddh_max
-    # end
-    # #end
-    # a_prev = a
-    # τ = max(τ - 1.0, -1.0)
-    # SparseCat([Float32[h, dh+x, a_prev, τ] for x in mdp.px.support], mdp.px.p)
 end
 
 # done
@@ -94,11 +81,13 @@ end
 # done
 function POMDPs.isterminal(mdp::SignalizedJunctionTurnLeftMDP, s)
     ego_distance, actor_distance = s
-    ego_distance < eps() && actor_distance > eps()
+    result = ego_distance < eps()
+    println(result)
+    return result
 end
 
 # unchanged - not needed
-POMDPs.discount(mdp::SignalizedJunctionTurnLeftMDP) = 0.99
+POMDPs.discount(mdp::SignalizedJunctionTurnLeftMDP) = 0.1
 
 
 ## Hard Coded Naive Controller Policy
@@ -113,7 +102,7 @@ end
 
 function POMDPs.action(Policy:: NaiveControlPolicy, s)
     ego_distance, actor_distance = s
-    action = (actor_distance < 50 && actor_distance > 0) ? 0 : 1
+    action = (actor_distance < 25 && actor_distance > 0) ? 0 : 1
     return action
 end
 
