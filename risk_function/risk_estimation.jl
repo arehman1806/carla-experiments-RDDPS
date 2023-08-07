@@ -9,7 +9,7 @@ include("./risk_solvers.jl")
 distance_junction = 20
 
 env = SignalizedJunctionTurnLeftMDP(distance_junction=distance_junction, safety_threshold=5, speed_limit=40.0, yield_threshold=5, reward_safety_violation=-100, dt=0.1, 
-        ego_distance0=Deterministic(distance_junction), actor_distance0=Distributions.Uniform(distance_junction/2, distance_junction*5))
+        ego_distance0=Deterministic(distance_junction), actor_distance0=Distributions.Uniform(1, 50))
 
 distance_actor_max = 100
 all_distance_actor = sort(distance_actor_max .- (collect(range(0, stop=distance_actor_max^(1/0.5), length=40))).^0.5)
@@ -28,7 +28,7 @@ function costfn(m, s, sp)
     cost = 1
     if isfailure(m, sp)
         # High cost for safety violation
-        cost = cost + 80
+        cost = cost + 10
     end
     return cost
 
@@ -42,7 +42,7 @@ function p_detect(s)
     # Linear interpolation between 20 and 100.
     # pd will be 1 when distance_actor is 20, and 0 when it's 100.
     pd = (100 - distance_actor) / 80.0
-    return pd
+    return 0.5
 end
 
 display(heatmap(all_distance_ego, all_distance_actor, (ego_distance, actor_distance)->p_detect([ego_distance, actor_distance, 0.0])))
@@ -64,35 +64,47 @@ noises = [[ϵ[1], 0.0, 0.0, 0.0] for ϵ in ϵ_grid]
 px = StateDependentDistributionPolicy(get_detect_dist, DiscreteSpace(noises))
 
 sim = RolloutSimulator()
-r = simulate(sim, rmdp, px, [20, 18, 0.0])
+r = simulate(sim, rmdp, px, [20, 21, 0.0])
 
-# s0 = [20, 90]
-# r_total = 0.0
-# d = 1.0
-# while !isterminal(rmdp, s0)
-#     a = action(px, s0)
-#     s0, r = @gen(:sp,:r)(rmdp, s0, a)
-#     r_total += d*r
-#     d *= discount(mdp)
-# end
-# println("reward_total:}"+ string(r_total))
 
 
 # # Get the distribution of returns and plot
-# N = 1000
+# N = 10000
 # D = episodes!(Sampler(rmdp, px), Neps=N)
-# samples = D[:r][1, D[:episode_end][:]]
+# samples = D[:r][1, D[:done][:]]
 
-# p1 = histogram(samples, title="CAS Costs", bins=range(0, 100, 50), normalize=true, alpha=0.3, xlabel="cost", label="MC")
+# function total_rewards_per_episode(D)
+#     rewards = D[:r]
+#     episode_ends = D[:episode_end]
+    
+#     total_rewards = Float32[]  # to store summed rewards for each episode
+#     episode_reward = 0.0
+    
+#     for i in 1:length(rewards)
+#         episode_reward += rewards[i]
+#         if episode_ends[i]
+#             push!(total_rewards, episode_reward)
+#             episode_reward = 0.0
+#         end
+#     end
+
+#     return total_rewards
+# end
+
+# episode_rewards = total_rewards_per_episode(D)
+
+# # print(samples)
+
+# p1 = histogram(episode_rewards, title="CAS Costs", bins=range(0, 100, 100), normalize=true, alpha=0.3, xlabel="cost", label="MC")
 
 # print(length(samples))
 
-# display(p1)
+# # display(p1)
 
 # # Set up cost points, state grid, and other necessary data
-# cost_points = collect(range(0, 100, 50))
-# s_grid = RectangleGrid(all_distance_ego, all_distance_actor)
-# 𝒮 = [[distance_ego, distance_actor] for distance_ego in all_distance_ego, distance_actor in all_distance_actor];
+# cost_points = collect(range(0, 100, 100))
+# s_grid = RectangleGrid(all_distance_ego, all_distance_actor, [0.0, 1.0])
+# 𝒮 = [[distance_ego, distance_actor, collision_occured] for distance_ego in all_distance_ego, distance_actor in all_distance_actor, collision_occured in [0.0, 1.0]];
 # s2pt(s) = s
 
 # # Solve for distribution over costs
@@ -100,7 +112,7 @@ r = simulate(sim, rmdp, px, [20, 18, 0.0])
 #     cost_points, mdp_type=:exp);
 
 # # Grab the initial state
-# si, wi = GridInterpolations.interpolants(s_grid, s2pt([20, 30]))
+# si, wi = GridInterpolations.interpolants(s_grid, s2pt([20, 21, 0.0]))
 # si = si[argmax(wi)]
 # println(cost_points)
 # println(Uw[si])
