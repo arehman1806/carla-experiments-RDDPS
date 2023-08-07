@@ -8,7 +8,7 @@ using POMDPTools, POMDPGym, POMDPs
     actions = [0, 1]
     reward_safety_violation = -100
     dt = 0.1 # the time step
-    ego_distance0 = Deterministic(x) # distance travelled by ego vehicle
+    ego_distance0 = Deterministic(distance_junction) # distance travelled by ego vehicle
     actor_distance0 = Distributions.Uniform(1, 100)
     distance_junction = 20
 
