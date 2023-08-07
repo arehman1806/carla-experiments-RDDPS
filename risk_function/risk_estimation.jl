@@ -8,7 +8,7 @@ include("./risk_solvers.jl")
 
 distance_junction = 20
 
-env = SignalizedJunctionTurnLeftMDP(safety_threshold=distance_junction, speed_limit=40.0, yield_threshold=distance_junction+5, reward_safety_violation=-100, dt=0.1, 
+env = SignalizedJunctionTurnLeftMDP(distance_junction=distance_junction, safety_threshold=5, speed_limit=40.0, yield_threshold=5, reward_safety_violation=-100, dt=0.1, 
         ego_distance0=Deterministic(distance_junction), actor_distance0=Distributions.Uniform(distance_junction/2, distance_junction*5))
 
 distance_actor_max = 100
@@ -20,24 +20,23 @@ display(scatter(all_distance_actor, zeros(length(all_distance_actor))))
 
 policy = GetNaivePolicy()
 
-display(heatmap(all_distance_ego, all_distance_actor, (distance_ego, distance_actor) -> action(policy, [distance_ego, distance_actor]), xlabel="τ (s)", ylabel="h (m)", title="CAS Policy"))
+display(heatmap(all_distance_ego, all_distance_actor, (distance_ego, distance_actor) -> action(policy, [distance_ego, distance_actor, 0.0]), xlabel="τ (s)", ylabel="h (m)", title="CAS Policy"))
 # costfn(m, s, sp) = isterminal(m, sp) ? abs(s[1]) : 0.0
 function costfn(m, s, sp)
+    ego_distance, actor_distance, collision_occured = s
+    # println("Ego Distance: $ego_distance, Actor Distance: $actor_distance, Collision Occurred: $collision_occured")
+    cost = 1
     if isfailure(m, sp)
         # High cost for safety violation
-        return 80.0
-    elseif isterminal(m, sp)
-        # Lower cost for successful turn
-        return 40.0
-    else
-        # No cost otherwise
-        return 0.0
+        cost = cost + 80
     end
+    return cost
+
 end
 rmdp = RMDP(env, policy, costfn, false, 1.0, 40.0, :both)
 
 function p_detect(s)
-    distance_ego, distance_actor = s
+    distance_ego, distance_actor, collision_occured = s
     # clip the distance_actor to be within 20 and 100
     distance_actor = max(min(distance_actor, 100), 20)
     # Linear interpolation between 20 and 100.
@@ -46,24 +45,26 @@ function p_detect(s)
     return pd
 end
 
-display(heatmap(all_distance_ego, all_distance_actor, (ego_distance, actor_distance)->p_detect([ego_distance, actor_distance])))
+display(heatmap(all_distance_ego, all_distance_actor, (ego_distance, actor_distance)->p_detect([ego_distance, actor_distance, 0.0])))
 
 function get_detect_dist(s)
     pd = p_detect(s)
-    noises = [[ϵ, 0.0, 0.0] for ϵ in [0, 1]]
-    return ObjectCategorical(noises, [1 - pd, pd])
+    noises = [[ϵ, 0.0, 0.0, 0.0] for ϵ in [0, 1]]
+    dist = ObjectCategorical(noises, [1 - pd, pd])
+    # display(dist)
+    return dist
 end
 
 noises_detect = [0, 1]
 
 ϵ_grid = RectangleGrid(noises_detect)
-noises = [[ϵ[1], 0.0, 0.0] for ϵ in ϵ_grid]
+noises = [[ϵ[1], 0.0, 0.0, 0.0] for ϵ in ϵ_grid]
 #probs = probs_detect # NOTE: will need to change once also have additive noise
 
 px = StateDependentDistributionPolicy(get_detect_dist, DiscreteSpace(noises))
 
 sim = RolloutSimulator()
-r = simulate(sim, rmdp, px, [20, 16])
+r = simulate(sim, rmdp, px, [20, 18, 0.0])
 
 # s0 = [20, 90]
 # r_total = 0.0

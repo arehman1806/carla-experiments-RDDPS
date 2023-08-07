@@ -7,9 +7,10 @@ using POMDPTools, POMDPGym, POMDPs
     yield_threshold::Float64 = 50.0 # if the oncoming traffic < yield_threshold away, yield!
     actions = [0, 1]
     reward_safety_violation = -100
-    dt = 0.1 # the time step
+    dt = 0.01 # the time step
     ego_distance0 = Deterministic(distance_junction) # distance travelled by ego vehicle
     actor_distance0 = Distributions.Uniform(10, 100)
+    distance_junction = 20
 
 #--------------------------------------------------------------------------------------------------#
 
@@ -30,29 +31,33 @@ end
 # done - LOOK AT THE LOGIC FOR NOT DETECTED AGAIN. JUST FOLLOWED THE EXAMPLE FROM DAAMDP
 function POMDPs.transition(mdp::SignalizedJunctionTurnLeftMDP, s, a, x, rng::AbstractRNG=Random.GLOBAL_RNG)
     not_detected = x == 0
-    ego_distance, actor_distace = s
-
-    actor_distace -= mdp.speed_limit * mdp.dt
-    print("actor position ")
-    println(actor_distace)
-    if (a == 1 || not_detected)
-        ego_distance -= mdp.speed_limit * mdp.dt
-        print("ego position ")
-        println(ego_distance)
+    println(x)
+    ego_distance, actor_distace, collision_occured = s
+    # println("changing ego distance. not_detected: $not_detected, a: $a")
+    if isfailure(mdp, s)
+        collision_occured = 1.0
     end
-    return SparseCat([Float32[ego_distance, actor_distace]], [1])
+    if collision_occured == 0.0
+        actor_distace -= mdp.speed_limit * mdp.dt
+        if (a == 1 || not_detected)
+            ego_distance -= mdp.speed_limit * mdp.dt
+        end
+    end
+    return SparseCat([Float32[ego_distance, actor_distace, collision_occured]], [1])
     # a = x == 0 ? 0.0 : a # COC if don't detect
 end
 
 # done
 function POMDPs.reward(mdp::SignalizedJunctionTurnLeftMDP, s, a)
-    ego_distance, actor_distance = s
-
-    r = 0.0
-    if isfailure(mdp, s)
+    ego_distance, actor_distance, collision_occured = s
+    # println("Ego Distance: $ego_distance, Actor Distance: $actor_distance, Collision Occurred: $collision_occured")
+    r = -1.0
+    if collision_occured == 1.0
         # We collided
         r += mdp.reward_safety_violation
     end
+    # println("Ego Distance: $ego_distance, Actor Distance: $actor_distance, Collision Occurred: $collision_occured, r: $r")
+    
     r
 end
 
@@ -61,7 +66,7 @@ POMDPs.convert_s(::Type{V} where {V<:AbstractVector{Float64}}, s::Array{Float32}
 
 # double check what variables are part of state space
 function POMDPs.initialstate(mdp::SignalizedJunctionTurnLeftMDP)
-    ImplicitDistribution((rng) -> Float32[rand(mdp.ego_distance0), rand(mdp.actor_distance0)])
+    ImplicitDistribution((rng) -> Float32[rand(mdp.ego_distance0), rand(mdp.actor_distance0), 0.0])
 end
 
 # done
@@ -74,20 +79,22 @@ disturbances(mdp::SignalizedJunctionTurnLeftMDP) = mdp.px.support
 
 # done
 function isfailure(mdp::SignalizedJunctionTurnLeftMDP, s)
-    ego_distance, actor_distance = s
-    actor_distance < mdp.safety_threshold && ego_distance > eps()
+    ego_distance, actor_distance, collision_occured = s
+
+
+    ((actor_distance < (mdp.safety_threshold + ego_distance) && actor_distance > -10) && ego_distance < mdp.distance_junction) && (collision_occured != 1.0)
 end
 
 # done
 function POMDPs.isterminal(mdp::SignalizedJunctionTurnLeftMDP, s)
-    ego_distance, actor_distance = s
-    result = ego_distance < eps()
-    println(result)
+    ego_distance, actor_distance, collision_occured = s
+    result = collision_occured == 1.0 || (ego_distance < eps())
+    println("Ego Distance: $ego_distance, Actor Distance: $actor_distance, Collision Occurred: $collision_occured, isterminal: $result")
     return result
 end
 
 # unchanged - not needed
-POMDPs.discount(mdp::SignalizedJunctionTurnLeftMDP) = 0.1
+POMDPs.discount(mdp::SignalizedJunctionTurnLeftMDP) = 0.99
 
 
 ## Hard Coded Naive Controller Policy
@@ -101,10 +108,11 @@ function GetNaivePolicy()
 end
 
 function POMDPs.action(Policy:: NaiveControlPolicy, s)
-    ego_distance, actor_distance = s
-    action = (actor_distance < 25 && actor_distance > 0) ? 0 : 1
+    ego_distance, actor_distance, collision_occured = s
+    action = ((actor_distance < (ego_distance+5) && actor_distance > -10) && ego_distance > 0) ? 0 : 1
     return action
 end
+
 
 # Stuff from DetecAndAvoidMDP:
 
