@@ -66,6 +66,9 @@ function solve_cvar_fixed_particle(rmdp, pa, grid, 𝒮, s2pt, cost_points; mdp_
 
     # Solve with backwards induction value iteration
     for (si, s) in enumerate(𝒮)
+        if si == 40
+            print("40 reached")
+        end
         a_dist = pa.pa(s)
         as = support(a_dist)
         ps = a_dist.p
@@ -81,6 +84,9 @@ function solve_cvar_fixed_particle(rmdp, pa, grid, 𝒮, s2pt, cost_points; mdp_
         end
         for ai in 1:length(as)
             Uw[si] .+= ps[ai] .* Qw[ai][si]
+        end
+        if sum(Uw[si]) < 0.9
+            println("state $s at $si is problematic. $(Uw[si])")
         end
     end
     Uw, Qw

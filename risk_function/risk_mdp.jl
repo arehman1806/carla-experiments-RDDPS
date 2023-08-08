@@ -36,6 +36,11 @@ function POMDPs.isterminal(mdp::RMDP, s)
     isterm
 end
 
+function check_safety_condition(mdp:: RMDP, s)
+    result = check_safety_condition(mdp.amdp, get_s(mdp, s))
+    return result
+end
+
 function isfailure(mdp::RMDP, s)
     isfailure(mdp.amdp, get_s(mdp,s))
 end
