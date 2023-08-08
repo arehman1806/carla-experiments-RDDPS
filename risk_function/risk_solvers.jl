@@ -87,6 +87,28 @@ function solve_cvar_fixed_particle(rmdp, pa, grid, 𝒮, s2pt, cost_points; mdp_
 end
 
 
+function q_ai_si_exp!(Qw, Uw, rmdp, ai, a, si, s, grid, cost_grid)
+    t = transition(rmdp, s, a)
+    for (s′, p) in t
+        if isterminal(rmdp, s′)
+            r = reward(rmdp, s, s′)
+            # println("reward for $s to $s′: $r")
+            ris, rps = interpolants(cost_grid, [r])
+            for (ri, rp) in zip(ris, rps)
+                if (p*rp) == 0
+                    println("updating $ai, $si, $ri with $(p*rp)")
+                end
+                Qw[ai][si][ri] += p * rp
+            end
+        else
+            s′i, s′w = GridInterpolations.interpolants(grid, s2pt(s′))
+            for (i, w) in zip(s′i, s′w)
+                Qw[ai][si] .+= p * w .* Uw[i]
+            end
+        end
+    end
+end
+
 function q_ai_si_gen!(Qw, Uw, rmdp, ai, a, si, s, grid, cost_grid; ngen, s2pt)
     for i = 1:ngen
         s′, r = gen(rmdp, s, a)
@@ -99,24 +121,6 @@ function q_ai_si_gen!(Qw, Uw, rmdp, ai, a, si, s, grid, cost_grid; ngen, s2pt)
             s′i, s′w = GridInterpolations.interpolants(grid, s2pt(s′))
             for (i, w) in zip(s′i, s′w)
                 Qw[ai][si] .+= (1 / ngen) * w .* Uw[i]
-            end
-        end
-    end
-end
-
-function q_ai_si_exp!(Qw, Uw, rmdp, ai, a, si, s, grid, cost_grid)
-    t = transition(rmdp, s, a)
-    for (s′, p) in t
-        if isterminal(rmdp, s′)
-            r = reward(rmdp, s, s′)
-            ris, rps = interpolants(cost_grid, [r])
-            for (ri, rp) in zip(ris, rps)
-                Qw[ai][si][ri] += p * rp
-            end
-        else
-            s′i, s′w = GridInterpolations.interpolants(grid, s2pt(s′))
-            for (i, w) in zip(s′i, s′w)
-                Qw[ai][si] .+= p * w .* Uw[i]
             end
         end
     end

@@ -31,7 +31,7 @@ end
 # done - LOOK AT THE LOGIC FOR NOT DETECTED AGAIN. JUST FOLLOWED THE EXAMPLE FROM DAAMDP
 function POMDPs.transition(mdp::SignalizedJunctionTurnLeftMDP, s, a, x, rng::AbstractRNG=Random.GLOBAL_RNG)
     not_detected = x == 0
-    println(x)
+    # println(x)
     ego_distance, actor_distace, collision_occured = s
     # println("changing ego distance. not_detected: $not_detected, a: $a")
     if isfailure(mdp, s)
@@ -58,7 +58,7 @@ function POMDPs.reward(mdp::SignalizedJunctionTurnLeftMDP, s, a)
     end
     # println("Ego Distance: $ego_distance, Actor Distance: $actor_distance, Collision Occurred: $collision_occured, r: $r")
     
-    r
+    return r
 end
 
 POMDPs.convert_s(::Type{Array{Float32}}, v::V where {V<:AbstractVector{Float64}}, ::SignalizedJunctionTurnLeftMDP) = Float32.(v)
@@ -88,8 +88,9 @@ end
 # done
 function POMDPs.isterminal(mdp::SignalizedJunctionTurnLeftMDP, s)
     ego_distance, actor_distance, collision_occured = s
-    result = collision_occured == 1.0 || (ego_distance < eps())
+    result = isfailure(mdp, s) || (ego_distance < eps())
     println("Ego Distance: $ego_distance, Actor Distance: $actor_distance, Collision Occurred: $collision_occured, isterminal: $result")
+    # println("is terminal is $result")
     return result
 end
 
