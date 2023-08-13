@@ -44,8 +44,8 @@ class DatasetGenSurrogateModel:
         # spawn the sensor and attach to vehicle.
         blueprint_library = self.world.get_blueprint_library()
         cam_bp = blueprint_library.find('sensor.camera.rgb')
-        cam_bp.set_attribute('image_size_x', '1216')
-        cam_bp.set_attribute('image_size_y', '1216')
+        cam_bp.set_attribute('image_size_x', '608')
+        cam_bp.set_attribute('image_size_y', '608')
         sensor_transform = carla.Transform(carla.Location(x=2.5, z=2))
         self.sensor = self.world.spawn_actor(cam_bp, sensor_transform, attach_to=self.ego_vehicle)
         # self.sensor = self.world.get_actors().filter("sensor.camera.rgb")[0]

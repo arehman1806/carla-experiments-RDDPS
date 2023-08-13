@@ -25,8 +25,17 @@ world = client.get_world()
 # Set the world in synchronous mode
 settings = world.get_settings()
 settings.synchronous_mode = True
-settings.fixed_delta_seconds = 0.05  # 0.05 seconds (20 FPS)
+settings.fixed_delta_seconds = 0.1  # 0.05 seconds (20 FPS)
 world.apply_settings(settings)
+weather = carla.WeatherParameters(
+    cloudiness=01.0,
+    precipitation=30.0,
+    sun_altitude_angle=90.0,
+    fog_density=90,
+    fog_distance=10)
+
+world.set_weather(weather)
+
 
 camera_image_queue = Queue()
 def process_img(image):
