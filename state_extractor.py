@@ -10,7 +10,8 @@ class StateExtractor:
     
     def check_overlap(self, detections, junction_threshold: list):
         # car bbox are in top left bottom right format and junction_bb contains 2 points and is a list of lists which define the threshold for oncomming traffic
-        car_bboxs = [detection[0:4] for detection in detections if detection[CAR_INDEX] == 2]
+        # car_bboxs = [detection[0:4] for detection in detections if detection[CAR_INDEX] == 2]#
+        car_bboxs = [detection[0:4] for detection in detections]
         #treating junction threshold as the line. the logic will be slightly different for a rectangle
         [px1, py1], [px2, py2] = junction_threshold
         min_distance = 1e9

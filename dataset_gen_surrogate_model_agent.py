@@ -311,19 +311,19 @@ class DatasetGenSurrogateModel:
                     iou = self.calculate_iou(detections[0], previous_xyxy)
                 else:
                     iou = 0
-                if (previous_at_junction and iou > 0.05) or iou > 0.5:
+                if (previous_at_junction and iou > 0.05) or iou > 0.3:
                     has_detected = 1
                 else:
                     has_detected = 0
                 data.append({"at_junction": previous_at_junction, "distance_to_junction": previous_distance_to_junction, "has_detected": has_detected})
-                print(f"IOU: {iou}")
+                print(f"count: {count}, IOU: {iou}")
                 self.draw_bb_on_image(previous_xyxy, annotated_camera_image)
                 # print(f"{at_junction}, {distance_to_junction}")
                 text = f"At Junction: {previous_at_junction}, Distance to Junction: {previous_distance_to_junction}, IOU: {iou}"
-                cv2.putText(annotated_camera_image, text, (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
+                cv2.putText(annotated_camera_image, text, (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2, cv2.LINE_AA)
                 active_loc = self.active_scenario_vehicle.get_location()
                 text2 = f"loc: {active_loc.x}, {active_loc.y}, {active_loc.z}"
-                cv2.putText(annotated_camera_image, text2, (10, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
+                cv2.putText(annotated_camera_image, text2, (10, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2, cv2.LINE_AA)
                 # cv2.imshow('Annotated Images',annotated_camera_image)
                 # if cv2.waitKey(1) == ord('q'):
                 #     break
