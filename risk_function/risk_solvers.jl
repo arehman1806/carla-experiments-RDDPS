@@ -66,8 +66,8 @@ function solve_cvar_fixed_particle(rmdp, pa, grid, 𝒮, s2pt, cost_points; mdp_
 
     # Solve with backwards induction value iteration
     for (si, s) in enumerate(𝒮)
-        if si == 40
-            print("40 reached")
+        if si == 560
+            println("560 reached")
         end
         a_dist = pa.pa(s)
         as = support(a_dist)
@@ -178,6 +178,7 @@ function CVaR(s, ϵ, s_grid, ϵ_grid, Qw, cost_points; alphaa)
     ϵis, ϵws = interpolants(ϵ_grid, ϵ)
     for (si, sw) in zip(sis, sws)
         for (ϵi, ϵw) in zip(ϵis, ϵws)
+            println("Qw[$ϵi][$si] = $(Qw[ϵi][si])")
             w .+= sw * ϵw .* Qw[ϵi][si]
         end
     end

@@ -38,6 +38,7 @@ function POMDPs.transition(mdp::SignalizedJunctionTurnLeftMDP, s, a, x, rng::Abs
     if ((a == 1 || not_detected) || ego_distance < mdp.distance_junction)
         ego_distance -= mdp.speed_limit * mdp.dt
     end
+    # println("ego distance: $ego_distance, actor_distance: $actor_distace")
     return SparseCat([Float32[ego_distance, actor_distace]], [1])
     # a = x == 0 ? 0.0 : a # COC if don't detect
 end
@@ -91,7 +92,8 @@ end
 
 function check_safety_condition(mdp:: SignalizedJunctionTurnLeftMDP, s)
     ego_distance, actor_distance = s
-    result = !(actor_distance > mdp.safety_threshold || actor_distance < -10 - mdp.distance_junction)
+    result = !(actor_distance > mdp.safety_threshold || actor_distance <= -10 - mdp.distance_junction)
+    # println("safety condition violated: $result. state: $s")
     return result
 end
 

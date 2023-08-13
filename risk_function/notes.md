@@ -1,0 +1,1 @@
+Rn the issue is that one mistake leads to failure. therefore, risk will not depend on the perception system as its only the initial state that matters!
