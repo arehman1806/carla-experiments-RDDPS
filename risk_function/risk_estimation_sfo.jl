@@ -4,53 +4,42 @@ using Plots
 using BSON
 
 include("./risk_mdp.jl")
-include("signalized_junction_turn_left_mdp.jl")
+include("./sfo_mdp.jl")
 include("./risk_solvers.jl")
 include("./surrogate_nn_architecture.jl")
 
 distance_junction = 20
 
-env = SignalizedJunctionTurnLeftMDP(distance_junction=distance_junction, safety_threshold=1, speed_limit=30, yield_threshold=5, reward_safety_violation=-100, dt=0.1, 
-        ego_distance0=Deterministic(distance_junction), actor_distance0=Distributions.Uniform(1, 50))
+env = StopForObstacleMDP(dt=0.1, a_min=-4.6, d0=Distributions.Uniform(44, 54), v0=Distributions.Uniform(10, 20))
 
-distance_actor_max = 50
-positive_range = distance_actor_max .- (collect(range(0, stop=distance_actor_max^(1/0.5), length=20))).^0.5
-negative_range = -positive_range # Create the negative mirror of the positive range
-all_distance_actor = sort(vcat(negative_range, positive_range))
-# all_distance_actor = sort(distance_actor_max .- (collect(range(0, stop=distance_actor_max^(1/0.5), length=40))).^0.5)
-all_distance_ego = sort(reverse(collect(range(0, 20, 40))))
 
-display(scatter(all_distance_actor, zeros(length(all_distance_actor))))
+all_d = sort(collect(range(0, 55, length=50)))
+all_v = sort(collect(range(0, 22, length=200)))
+
+# display(scatter(all_d, zeros(length(all_d))))
 
 policy = GetNaivePolicy()
 
-# display(heatmap(all_distance_ego, all_distance_actor, (distance_ego, distance_actor) -> action(policy, [distance_ego, distance_actor, 0.0]), xlabel="τ (s)", ylabel="h (m)", title="CAS Policy"))
+display(heatmap(all_d, all_v, (d, v) -> action(policy, [d, v]), xlabel="d", ylabel="v", title="SFO Policy"))
 
 
 function costfn(m, s, sp)
-    ego_distance, actor_distance = s
-    dist_min = 5
-    dist_max = 10 + distance_junction
-
+    d, v = sp
     cost = 0
     if isterminal(m, sp)
-        # println("is terminal")
-        if abs(actor_distance) < dist_min
-            cost += 50
-        elseif abs(actor_distance) < dist_max
-            cost += 100/abs(actor_distance)
+        if v > 0
+            cost += v
         end
     end
-    println("returning cost $cost")
+    # println("returning cost $cost")
     return cost
-
 end
 rmdp = RMDP(env, policy, costfn, false, 1.0, 40.0, :both)
 
 model_data = BSON.load("./risk_function/surrogate_nn_model.bson")
 model = model_data[:model]
-p_detect(s) = model([s[2]])[1]
-# p_detect(s) = 0.5
+# p_detect(s) = model([s[2]])[1]
+p_detect(s) = 0.1
 
 # function p_detect(s)
 #     distance_ego, distance_actor = s
@@ -86,28 +75,25 @@ px = StateDependentDistributionPolicy(get_detect_dist, DiscreteSpace(noises))
 
 
 
-# Get the distribution of returns and plot
-N = 10000
-D = episodes!(Sampler(rmdp, px), Neps=N)
-samples = D[:r][1, D[:done][:]]
+# # Get the distribution of returns and plot
+# N = 10000
+# D = episodes!(Sampler(rmdp, px), Neps=N)
+# samples = D[:r][1, D[:done][:]]
 
+# p1 = histogram(samples, title="CAS Costs", bins=range(-1, 50, 100), normalize=true, alpha=0.3, xlabel="cost", label="MC")
 
-# print(samples)
+# print(length(samples))
 
-p1 = histogram(samples, title="Costs", bins=range(0, 100, 100), normalize=true, alpha=0.3, xlabel="cost", label="MC")
-
-print(length(samples))
-
-display(p1)
+# display(p1)
 
 # Set up cost points, state grid, and other necessary data
 cost_points = collect(range(0, 100, 11))
 # cost_points = [0, 50]
-s_grid = RectangleGrid(all_distance_ego, all_distance_actor)
-𝒮 = [[distance_ego, distance_actor] for distance_ego in all_distance_ego, distance_actor in all_distance_actor];
+s_grid = RectangleGrid(all_d, all_v)
+𝒮 = [[d, v] for d in all_d, v in all_v];
 s2pt(s) = s
 
-# Solve for distribution over costs
+# # Solve for distribution over costs
 @time Uw, Qw = solve_cvar_fixed_particle(rmdp, px, s_grid, 𝒮, s2pt,
     cost_points, mdp_type=:exp);
 
@@ -125,20 +111,20 @@ si = si[argmax(wi)]
 println(cost_points)
 println(Uw[si])
 println(s_grid[si])
-p2 = histogram!(cost_points, weights=Uw[si], bins=range(0, 100, 50), normalize=true, alpha=1, label="DP")
-display(p2)
+# p2 = histogram!(cost_points, weights=Uw[si], bins=range(0, 100, 50), normalize=true, alpha=1, label="DP")
+# display(p2)
 # Create CVaR convenience functions
 CVaR(s, ϵ, α) = CVaR(s, ϵ, s_grid, ϵ_grid, Qw, cost_points; alphaa=α)
 
 # Plot one sample
-# heatmap(all_distance_ego, all_distance_actor, (x, y) -> CVaR([x, y], [0], 0.0), title="α = 0", xlabel="ego_distance_left (m)", ylabel="actor_distance_left (m)")
-plot(all_distance_actor, (y) -> CVaR([20, y], [0], 0.0), title="α = 0", xlabel="actor_distance_junction (m)", ylabel="Risk")
+heatmap(all_d, all_v, (x, y) -> CVaR([x, y], [0], 0.0), title="α = 0", xlabel="relative distance (m)", ylabel="velocity m/s^2")
+# plot(all_distance_actor, (y) -> CVaR([20, y], [0], 0.0), title="α = 0", xlabel="actor_distance_junction (m)", ylabel="Risk")
 
 # hline!([0], color=:black, lw=2, label=false)
 # anim = @animate for α in range(-1.0, 1.0, length=51)
-#     heatmap(all_distance_ego, all_distance_actor, (x, y) -> CVaR([x, y], [0], α), title="CVaR (α = $α)", clims=(0, 150), xlabel="distance ego (m)", ylabel="distance actor (m)")
+#     heatmap(all_d, all_v, (x, y) -> CVaR([x, y], [0], α), title="CVaR (α = $α)", clims=(0, 150), xlabel="distance ego (m)", ylabel="distance actor (m)")
 # end
-# Plots.gif(anim, "./risk_function/figures/daa_CVaR_v3.gif", fps=6)
+# Plots.gif(anim, "./risk_function/figures/sfo_CVaR_v3.gif", fps=6)
 
 # -------------------------------------------------------
 

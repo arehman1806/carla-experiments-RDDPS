@@ -54,19 +54,20 @@ function solve_cvar_particle(mdp, pa, grid, 𝒮, s2pt)
     Qp, Qw
 end
 
-function solve_cvar_fixed_particle(rmdp, pa, grid, 𝒮, s2pt, cost_points; mdp_type=:gen, ngen=1)
+function solve_cvar_fixed_particle(rmdp, pa, grid, 𝒮, s2pt, cost_points; mdp_type=:gen, ngen=1, Uw=nothing, Qw=nothing)
     # as = support(pa)
     # ps = pa.p
     as = action_space(pa).vals
     N = length(cost_points)
     cost_grid = RectangleGrid(cost_points)
-
-    Uw = [zeros(N) for i = 1:length(𝒮)] # Values
-    Qw = [[zeros(N) for i = 1:length(𝒮)] for a in as] # state-ation values
+    if Uw === nothing || Qw === nothing
+        Uw = [zeros(N) for i = 1:length(𝒮)] # Values
+        Qw = [[zeros(N) for i = 1:length(𝒮)] for a in as] # state-ation values
+    end
 
     # Solve with backwards induction value iteration
     for (si, s) in enumerate(𝒮)
-        if si == 560
+        if si == 22
             println("560 reached")
         end
         a_dist = pa.pa(s)
@@ -102,11 +103,12 @@ function q_ai_si_exp!(Qw, Uw, rmdp, ai, a, si, s, grid, cost_grid)
             ris, rps = interpolants(cost_grid, [r])
             for (ri, rp) in zip(ris, rps)
                 if (p*rp) == 0
-                    println("updating $ai, $si, $ri with $(p*rp)")
+                    # println("updating $ai, $si, $ri with $(p*rp)")
                 end
                 Qw[ai][si][ri] += p * rp
             end
         else
+            # println(s′)
             s′i, s′w = GridInterpolations.interpolants(grid, s2pt(s′))
             for (i, w) in zip(s′i, s′w)
                 Qw[ai][si] .+= p * w .* Uw[i]
@@ -178,7 +180,7 @@ function CVaR(s, ϵ, s_grid, ϵ_grid, Qw, cost_points; alphaa)
     ϵis, ϵws = interpolants(ϵ_grid, ϵ)
     for (si, sw) in zip(sis, sws)
         for (ϵi, ϵw) in zip(ϵis, ϵws)
-            println("Qw[$ϵi][$si] = $(Qw[ϵi][si])")
+            # println("Qw[$ϵi][$si] = $(Qw[ϵi][si])")
             w .+= sw * ϵw .* Qw[ϵi][si]
         end
     end
