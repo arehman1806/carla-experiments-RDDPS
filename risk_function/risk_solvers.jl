@@ -87,7 +87,7 @@ function solve_cvar_fixed_particle(rmdp, pa, grid, 𝒮, s2pt, cost_points; mdp_
             Uw[si] .+= ps[ai] .* Qw[ai][si]
         end
         if sum(Uw[si]) < 0.9
-            println("state $s at $si is problematic. $(Uw[si])")
+            # println("state $s at $si is problematic. $(Uw[si])")
         end
     end
     Uw, Qw
@@ -97,18 +97,19 @@ end
 function q_ai_si_exp!(Qw, Uw, rmdp, ai, a, si, s, grid, cost_grid)
     t = transition(rmdp, s, a)
     for (s′, p) in t
+        r = reward(rmdp, s, s′)
+        ris, rps = interpolants(cost_grid, [r])
         if isterminal(rmdp, s′)
-            r = reward(rmdp, s, s′)
+            
             # println("reward for $s to $s′: $r")
-            ris, rps = interpolants(cost_grid, [r])
             for (ri, rp) in zip(ris, rps)
-                if (p*rp) == 0
-                    # println("updating $ai, $si, $ri with $(p*rp)")
-                end
                 Qw[ai][si][ri] += p * rp
             end
         else
             # println(s′)
+            for (ri, rp) in zip(ris, rps)
+                Qw[ai][si][ri] += p * rp
+            end
             s′i, s′w = GridInterpolations.interpolants(grid, s2pt(s′))
             for (i, w) in zip(s′i, s′w)
                 Qw[ai][si] .+= p * w .* Uw[i]

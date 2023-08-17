@@ -13,6 +13,10 @@ using Parameters, Random
     disturbance_type=:arg #:arg if passed as argument, :noise if used as noise on the state
 end
 
+function action_s_s′(mdp::RMDP, s, s′)
+    return action(mdp.π, s)
+end
+
 function POMDPs.initialstate(mdp::RMDP)
     s0 = initialstate(mdp.amdp)
     if mdp.include_time_in_state
@@ -39,6 +43,10 @@ end
 function check_safety_condition(mdp:: RMDP, s)
     result = check_safety_condition(mdp.amdp, get_s(mdp, s))
     return result
+end
+
+function is_inside_junction(mdp::RMDP, s)
+    return is_inside_junction(mdp.amdp, get_s(mdp, s))
 end
 
 function isfailure(mdp::RMDP, s)
