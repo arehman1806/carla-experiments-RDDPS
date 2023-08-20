@@ -28,12 +28,12 @@ function POMDPs.gen(mdp::SignalizedJunctionTurnLeftMDP, s, a, x, rng::AbstractRN
 end
 
 function POMDPs.transition(mdp::SignalizedJunctionTurnLeftMDP, s, a_required, x, rng::AbstractRNG=Random.GLOBAL_RNG)
-    detected = x != 0
+    detected = x != 0 ? 1 : 0
     d_ego, v_ego, d_actor, a_detected = s
     v_ego_next = max((v_ego + a_required * mdp.dt), 0) # its speed not vel so cant get below 0
     d_ego_next = d_ego - (v_ego * mdp.dt + (0.5 * a_required * mdp.dt^2))
     d_actor_next = d_actor - mdp.speed_limit*mdp.dt
-    # println("d_ego: $d_ego, v_ego: $v_ego, d_actor: $d_actor, accel: $a_required, d_ego_next: $d_ego_next, v_ego_next: $v_ego_next, detected: $detected")
+    println("d_ego: $d_ego, v_ego: $v_ego, d_actor: $d_actor, accel: $a_required, d_ego_next: $d_ego_next, v_ego_next: $v_ego_next, detected: $detected")
     return SparseCat([Float32[d_ego_next, v_ego_next, d_actor_next, detected]], [1])
 end
 

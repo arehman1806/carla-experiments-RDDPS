@@ -1,0 +1,12 @@
+<scenarios>
+    <scenario name="DatasetGenPerceptionModel_1" type="DatasetGenPerceptionModel" town="Town03">
+        <ego_vehicle x="-74.9" y="148.7" z="0.2" yaw="0" model="vehicle.lincoln.mkz_2017" />
+        <other_actor x="-84.3" y="119.4" z="0.0" yaw="180" model="vehicle.tesla.model3" />
+        <other_actor x="-84.3" y="119.4" z="0.0" yaw="180" model="vehicle.audi.etron" />
+        <other_actor x="-84.3" y="119.4" z="0.0" yaw="180" model="vehicle.bmw.grandtourer" />
+        <other_actor x="-84.3" y="119.4" z="0.0" yaw="180" model="vehicle.chevrolet.impala" />
+        <other_actor x="-84.3" y="119.4" z="0.0" yaw="180" model="vehicle.dodge.charger_2020" />
+        <other_actor x="-84.3" y="119.4" z="0.0" yaw="180" model="vehicle.ford.mustang" />
+        <weather cloudiness="0" precipitation="0" precipitation_deposits="0" wind_intensity="0" sun_azimuth_angle="0" sun_altitude_angle="0" />
+     </scenario>
+</scenarios>

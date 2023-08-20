@@ -142,12 +142,11 @@ def interpolate_trajectory(world, waypoints_trajectory, hop_resolution=1.0):
     # Obtain route plan
     route = []
     for i in range(len(waypoints_trajectory) - 1):   # Goes until the one before the last.
-
         waypoint = waypoints_trajectory[i]
         waypoint_next = waypoints_trajectory[i + 1]
         interpolated_trace = grp.trace_route(waypoint.transform.location, waypoint_next.transform.location)
-        if len(interpolated_trace) > 30:
-            continue
+        # if len(interpolated_trace) > 30:
+        #     continue
         for wp_tuple in interpolated_trace:
             route.append((wp_tuple[0].transform, wp_tuple[1]))
 
@@ -156,3 +155,31 @@ def interpolate_trajectory(world, waypoints_trajectory, hop_resolution=1.0):
     lat_ref, lon_ref = _get_latlon_ref(world)
 
     return location_route_to_gps(route, lat_ref, lon_ref), route
+
+
+def interpolate_wp_trajectory(world, waypoints_trajectory, hop_resolution=1.0):
+    """
+        Given some raw keypoints interpolate a full dense trajectory to be used by the user.
+    :param world: an reference to the CARLA world so we can use the planner
+    :param waypoints_trajectory: the current coarse trajectory
+    :param hop_resolution: is the resolution, how dense is the provided trajectory going to be made
+    :return: the full interpolated route both in GPS coordinates and also in its original form.
+    """
+
+    grp = GlobalRoutePlanner(world.get_map(), hop_resolution)
+    # Obtain route plan
+    route = []
+    for i in range(len(waypoints_trajectory) - 1):   # Goes until the one before the last.
+        waypoint = waypoints_trajectory[i]
+        waypoint_next = waypoints_trajectory[i + 1]
+        interpolated_trace = grp.trace_route(waypoint.transform.location, waypoint_next.transform.location)
+        # if len(interpolated_trace) > 30:
+        #     continue
+        for wp_tuple in interpolated_trace:
+            route.append((wp_tuple[0], wp_tuple[1]))
+
+    # Increase the route position to avoid fails
+
+    lat_ref, lon_ref = _get_latlon_ref(world)
+
+    return route

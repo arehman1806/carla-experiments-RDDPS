@@ -107,9 +107,9 @@ function q_ai_si_exp!(Qw, Uw, rmdp, ai, a, si, s, grid, cost_grid)
             end
         else
             # println(s′)
-            for (ri, rp) in zip(ris, rps)
-                Qw[ai][si][ri] += p * rp
-            end
+            # for (ri, rp) in zip(ris, rps)
+            #     Qw[ai][si][ri] += p * rp
+            # end
             s′i, s′w = GridInterpolations.interpolants(grid, s2pt(s′))
             for (i, w) in zip(s′i, s′w)
                 Qw[ai][si] .+= p * w .* Uw[i]
