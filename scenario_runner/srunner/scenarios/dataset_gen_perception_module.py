@@ -144,12 +144,12 @@ class DatasetGenPerceptionModel(BasicScenario):
         
         
         sequence.add_child(weather)
-        for actor in self.other_actors:
+        for actor in self.other_actors[0:1]:
             actor.rolename = "abc"
 
-            for route in self._other_routes:
+            for route in self._other_routes[0:1]:
 
-                for ego_spawn_point in self._ego_points:
+                for ego_spawn_point in self._ego_points[0:1]:
                     ego_transform_setter = ActorTransformSetter(self._ego_vehicle, ego_spawn_point.transform, False)
                     actor_transform_setter = ActorTransformSetter(actor, route[0].transform)
                     wpf = WaypointFollower(actor, 25, [(route[1], RoadOption.LANEFOLLOW)])

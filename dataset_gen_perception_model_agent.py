@@ -33,6 +33,14 @@ class DatasetGenPerceptionModelAgent:
         self.map = self.world.get_map()
         self.dummy_tick = False
 
+        self.current_image_index = 0
+        self.current_rgb_image_index = 0
+        self.start_timestamp = time.time()
+        dir_path = f"./recording/{self.start_timestamp}"
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path, exist_ok=True)  # Create directory if it doesn't exist
+
+
 
         self.camera_image_queue = deque()
         self.ego_vehicle, self.other_vehicles = self.get_ego_and_other_vehicles()
@@ -43,15 +51,24 @@ class DatasetGenPerceptionModelAgent:
 
         # spawn the sensor and attach to vehicle.
         blueprint_library = self.world.get_blueprint_library()
+        cam_bp = blueprint_library.find('sensor.camera.instance_segmentation')
+        cam_bp.set_attribute('image_size_x', '608')
+        cam_bp.set_attribute('image_size_y', '608')
+        sensor_transform = carla.Transform(carla.Location(x=2.5, z=2))
+        self.sensor = self.world.spawn_actor(cam_bp, sensor_transform, attach_to=self.ego_vehicle)
+        self.sensor.listen(lambda image: self.process_img(image))
+
+
+        blueprint_library = self.world.get_blueprint_library()
         cam_bp = blueprint_library.find('sensor.camera.rgb')
         cam_bp.set_attribute('image_size_x', '608')
         cam_bp.set_attribute('image_size_y', '608')
         cam_bp.set_attribute('motion_blur_intensity', '1')
         cam_bp.set_attribute('motion_blur_max_distortion', '1')
         sensor_transform = carla.Transform(carla.Location(x=2.5, z=2))
-        self.sensor = self.world.spawn_actor(cam_bp, sensor_transform, attach_to=self.ego_vehicle)
-        # self.sensor = self.world.get_actors().filter("sensor.camera.rgb")[0]
-        self.sensor.listen(lambda image: self.process_img(image))
+        self.rgb_sensor = self.world.spawn_actor(cam_bp, sensor_transform, attach_to=self.ego_vehicle)
+        self.rgb_sensor.listen(lambda image: self.process_img(image, rgb=True))
+
 
         # Get the attributes from the camera
         image_w = cam_bp.get_attribute("image_size_x").as_int()
@@ -127,16 +144,19 @@ class DatasetGenPerceptionModelAgent:
         else:
             return waypoint.get_junction()
     
-    def process_img(self, image):
+    def process_img(self, image: carla.Image, rgb=False):
         # Convert the image from CARLA format to an OpenCV image (RGB)
         if self.dummy_tick:
             self.dummy_tick = False
             return
-        img0 = np.array(image.raw_data).reshape((image.height, image.width, 4))
-        img0 = img0[:, :, :3]
-        self.camera_image_queue.append(np.array(img0))
-        self.current_camera_image = img0
-        # print(f"{self.world.get_snapshot().frame}, {image.frame}")
+        if rgb:
+            print(f"RGB image frame: {image.frame}")
+            image.save_to_disk(f"./recording/{self.start_timestamp}/rgb/{image.frame}.png")
+            self.current_rgb_image_index = image.frame
+        else:
+            print(f"image frame: {image.frame}")
+            image.save_to_disk(f"./recording/{self.start_timestamp}/instance/{image.frame}.png")
+            self.current_image_index = image.frame
 
     def get_traffic_lights(self) -> Tuple[carla.TrafficLight, carla.TrafficLight]:
         ego_light = self.ego_vehicle.get_traffic_light()
@@ -264,7 +284,7 @@ class DatasetGenPerceptionModelAgent:
     
     def save_to_csv(self, filename, data_list):
         file_exists = os.path.isfile(filename)
-        headers = ['ego_distance', 'actor_distance']
+        headers = ['frame_id', 'ego_distance', 'actor_distance']
         with open(filename, 'a') as csvfile:
             writer = csv.DictWriter(csvfile, delimiter=',', lineterminator='\n', fieldnames=headers)
             if not file_exists:
@@ -279,12 +299,8 @@ class DatasetGenPerceptionModelAgent:
         print("Triggered the light")
         count = 0
         previous_ego_distance, previous_actor_distance = 0, 0
-        previous_xyxy = (0,0,0,0)
 
         while True:
-            # while self.camera_image_queue.qsize() > 1:
-            #     self.camera_image_queue.get()
-            # print(f"{self.active_scenario_vehicle.get_transform().location.x}, {self.active_scenario_vehicle.get_transform().location.y}, {self.active_scenario_vehicle.get_transform().location.z}")
             if self.active_scenario_vehicle.get_transform().location.z < -4:
                 if not self.set_active_vehicle():
                     print("no active non scenario vehicle for 100 ticks")
@@ -293,29 +309,13 @@ class DatasetGenPerceptionModelAgent:
             if self.agent.done():
                 print("The target has been reached, stopping the simulation")
                 break
-            
-            at_junction = False
-            if not len(self.camera_image_queue) == 0:
-                annotated_camera_image = self.camera_image_queue.pop()
-                data.append({"ego_distance": previous_ego_distance, "actor_distance": previous_actor_distance})
-                # print(f"count: {count}, IOU: {iou}")
-                self.draw_bb_on_image(previous_xyxy, annotated_camera_image)
-                # print(f"{at_junction}, {distance_to_junction}")
-                text = f"ego_distance: {previous_ego_distance}, Actor distance: {previous_actor_distance}"
-                cv2.putText(annotated_camera_image, text, (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2, cv2.LINE_AA)
-                # active_loc = self.active_scenario_vehicle.get_location()
-                # text2 = f"loc: {active_loc.x}, {active_loc.y}, {active_loc.z}"
-                # cv2.putText(annotated_camera_image, text2, (10, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2, cv2.LINE_AA)
-                cv2.imshow('Annotated Images',annotated_camera_image)
-                if cv2.waitKey(1) == ord('q'):
-                    break
-                # cv2.imshow("annotated images", annotated_image_queue.pop())
-                cv2.imwrite(f"./recording/{count}.png", annotated_camera_image)
-                count += 1
-                previous_ego_distance, previous_actor_distance = self.get_state()
-                previous_xyxy = self.get_ground_truth()
-            else:
-                print("empty queue")
+            frame_id = self.world.get_snapshot().frame
+            while self.current_image_index < frame_id or self.current_rgb_image_index < frame_id:
+                time.sleep(0.1)
+                print("waiting for image sync")
+            print(f"current frame: ", frame_id)
+            previous_ego_distance, previous_actor_distance = self.get_state()
+            data.append({"frame_id": frame_id, "ego_distance": previous_ego_distance, "actor_distance": previous_actor_distance})
             self.ego_vehicle.apply_control(self.agent.run_step())
             self.world.tick()
             if len(data) > 10:
@@ -332,5 +332,9 @@ if __name__ == "__main__":
     datasetgenerator = DatasetGenPerceptionModelAgent()
     try:
         datasetgenerator.start_data_collection()
+        while True:
+            pass
     except KeyboardInterrupt:
+        
         datasetgenerator.cleanup()
+    
