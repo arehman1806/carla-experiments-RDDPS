@@ -152,7 +152,7 @@ def main():
     argparser = argparse.ArgumentParser(description=__doc__)
     argparser.add_argument(
         '--record', '-r',
-        default="1692557874.9057295",
+        default="1692564886.98098",
         help='Rawdata Record ID. e.g. record_2022_0113_1337'
     )
     argparser.add_argument(

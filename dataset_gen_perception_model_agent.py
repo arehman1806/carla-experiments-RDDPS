@@ -284,7 +284,7 @@ class DatasetGenPerceptionModelAgent:
     
     def save_to_csv(self, filename, data_list):
         file_exists = os.path.isfile(filename)
-        headers = ['frame_id', 'ego_distance', 'actor_distance']
+        headers = ['frame_id', 'ego_distance', 'ego_velocity', 'actor_distance']
         with open(filename, 'a') as csvfile:
             writer = csv.DictWriter(csvfile, delimiter=',', lineterminator='\n', fieldnames=headers)
             if not file_exists:
@@ -315,13 +315,16 @@ class DatasetGenPerceptionModelAgent:
                 print("waiting for image sync")
             print(f"current frame: ", frame_id)
             previous_ego_distance, previous_actor_distance = self.get_state()
-            data.append({"frame_id": frame_id, "ego_distance": previous_ego_distance, "actor_distance": previous_actor_distance})
+            for i, vel in enumerate([10,14,16,18,20,25]):
+                frame_id_iv = f"{frame_id}_{i}"
+                data.append({"frame_id": frame_id_iv, "ego_distance": previous_ego_distance, "ego_velocity": vel, "actor_distance": previous_actor_distance})
             self.ego_vehicle.apply_control(self.agent.run_step())
             self.world.tick()
-            if len(data) > 10:
+            if len(data) > 100:
                 self.save_to_csv("scenario_1.csv", data)
                 data = []
             # time.sleep(0.1)
+        self.save_to_csv("scenario_1.csv", data)
         self.sensor.destroy()
     
     def cleanup(self):
@@ -332,8 +335,6 @@ if __name__ == "__main__":
     datasetgenerator = DatasetGenPerceptionModelAgent()
     try:
         datasetgenerator.start_data_collection()
-        while True:
-            pass
     except KeyboardInterrupt:
         
         datasetgenerator.cleanup()
