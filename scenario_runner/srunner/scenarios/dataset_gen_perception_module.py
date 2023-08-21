@@ -144,12 +144,12 @@ class DatasetGenPerceptionModel(BasicScenario):
         
         
         sequence.add_child(weather)
-        for actor in self.other_actors[0:1]:
+        for actor in self.other_actors:
             actor.rolename = "abc"
 
-            for route in self._other_routes[0:1]:
+            for route in self._other_routes:
 
-                for ego_spawn_point in self._ego_points[0:1]:
+                for ego_spawn_point in self._ego_points:
                     ego_transform_setter = ActorTransformSetter(self._ego_vehicle, ego_spawn_point.transform, False)
                     actor_transform_setter = ActorTransformSetter(actor, route[0].transform)
                     wpf = WaypointFollower(actor, 25, [(route[1], RoadOption.LANEFOLLOW)])
@@ -206,31 +206,6 @@ class DatasetGenPerceptionModel(BasicScenario):
                                         persistent_lines=True)
         
         return ego_points
-
-        # intersection = self.get_next_intersection(current_tl_stop_point)
-        # ent_exit_pts = intersection.get_waypoints(carla.LaneType.Driving)
-        # junction_pts = []
-        # for sublish in ent_exit_pts:
-        #     junction_pts.extend(sublish)
-        # yaw_target = current_tl_stop_point.transform.rotation.yaw
-        # loc_target = current_tl_stop_point.transform.location
-        # stop_point = None
-        # min_distance = 1e9
-        # for point in junction_pts:
-        #     yaw = point.transform.rotation.yaw
-        #     loc = point.transform.location
-        #     dist = loc.distance(loc_target)
-            
-        #     if dist < min_distance:
-        #         stop_point = point
-        #         min_distance = dist
-        # CarlaDataProvider._world.debug.draw_string(stop_point.transform.location, 'main_stop_point', draw_shadow=False,
-        #                                 color=carla.Color(r=255, g=0, b=255), life_time=1e9,
-        #                                 persistent_lines=True)
-        # for point in junction_pts:
-        #     CarlaDataProvider._world.debug.draw_string(point.transform.location, 'jp', draw_shadow=False,
-        #                                 color=carla.Color(r=162, g=25, b=255), life_time=1e9,
-        #                                 persistent_lines=True)
     
     def get_next_intersection(self, waypoint):
         list_of_waypoints = []
@@ -246,7 +221,8 @@ class DatasetGenPerceptionModel(BasicScenario):
 
     def get_start_end_wp_traj(self, waypoint):
         list_of_waypoints = waypoint.previous_until_lane_start(1)[:-1]
-        first_wp = list_of_waypoints[-1]
+        len_points = len(list_of_waypoints)
+        first_wp = list_of_waypoints[-int(len_points / 3)]
         plan, _ = generate_target_waypoint_list(waypoint, 0)
         end_wp = [point[0] for point in plan][-1]
         return [first_wp, end_wp]

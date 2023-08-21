@@ -65,13 +65,6 @@ class YoloLabelTool:
         pool.join()
         print("cost: {:0<3f}s".format(time.time() - start))
 
-
-
-        # start = time.time()
-        # for index, frame in rawdata_df.iterrows():
-        #     self.process_frame(index, frame)
-        # print("cost: {:0<3f}s".format(time.time() - start))
-
     def process_frame_instance(self, index, frame):
         rgb_img_path = frame['rgb_image_path']
         seg_img_path = frame['semantic_image_path']
@@ -136,7 +129,7 @@ class YoloLabelTool:
                 labels_all.append(label_info)
 
                 # Debug: draw the bounding box
-                cv2.rectangle(image_rgb, (x_min, y_min), (x_max, y_max), (0, 255, 0), 1)
+                # cv2.rectangle(image_rgb, (x_min, y_min), (x_max, y_max), (0, 255, 0), 1)
 
         if len(labels_all) > 0:
             write_image(output_dir, frame_id, image_rgb, frame["split"])
@@ -152,7 +145,7 @@ def main():
     argparser = argparse.ArgumentParser(description=__doc__)
     argparser.add_argument(
         '--record', '-r',
-        default="1692564886.98098",
+        default="1692622994.599725",
         help='Rawdata Record ID. e.g. record_2022_0113_1337'
     )
     argparser.add_argument(

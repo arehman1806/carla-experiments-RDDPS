@@ -13,7 +13,7 @@ import yaml
 
 
 class YoloConfig:
-    rectangle_pixels_min = 50
+    rectangle_pixels_min = 30
     color_pixels_min = 30
 
 

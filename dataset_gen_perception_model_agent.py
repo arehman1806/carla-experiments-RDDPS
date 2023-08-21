@@ -35,6 +35,8 @@ class DatasetGenPerceptionModelAgent:
 
         self.current_image_index = 0
         self.current_rgb_image_index = 0
+        self.data_collection_started = False
+        self.frames_skipped = []
         self.start_timestamp = time.time()
         dir_path = f"./recording/{self.start_timestamp}"
         if not os.path.exists(dir_path):
@@ -146,17 +148,22 @@ class DatasetGenPerceptionModelAgent:
     
     def process_img(self, image: carla.Image, rgb=False):
         # Convert the image from CARLA format to an OpenCV image (RGB)
-        if self.dummy_tick:
-            self.dummy_tick = False
+        # if self.dummy_tick:
+        #     self.dummy_tick = False
+        #     return
+        frame_id = image.frame
+        if not self.data_collection_started or frame_id in self.frames_skipped:
+            print(f"skipping img frame {frame_id}")
             return
+        
         if rgb:
-            print(f"RGB image frame: {image.frame}")
-            image.save_to_disk(f"./recording/{self.start_timestamp}/rgb/{image.frame}.png")
-            self.current_rgb_image_index = image.frame
+            print(f"RGB image frame: {frame_id}")
+            image.save_to_disk(f"./recording/{self.start_timestamp}/rgb/{frame_id}.png")
+            self.current_rgb_image_index = frame_id
         else:
-            print(f"image frame: {image.frame}")
-            image.save_to_disk(f"./recording/{self.start_timestamp}/instance/{image.frame}.png")
-            self.current_image_index = image.frame
+            print(f"image frame: {frame_id}")
+            image.save_to_disk(f"./recording/{self.start_timestamp}/instance/{frame_id}.png")
+            self.current_image_index = frame_id
 
     def get_traffic_lights(self) -> Tuple[carla.TrafficLight, carla.TrafficLight]:
         ego_light = self.ego_vehicle.get_traffic_light()
@@ -293,6 +300,7 @@ class DatasetGenPerceptionModelAgent:
                 writer.writerow(data)
 
     def start_data_collection(self):
+        skip_frames = 2
         data = []
         # Setting the light to green is the trigger for scenario. See DatasetGenSurrogateModel scenario
         self.ego_traffic_light.set_state(carla.TrafficLightState.Green)
@@ -300,7 +308,15 @@ class DatasetGenPerceptionModelAgent:
         count = 0
         previous_ego_distance, previous_actor_distance = 0, 0
 
+        self.data_collection_started = True
         while True:
+            frame_id = self.world.get_snapshot().frame
+            for _ in range(0, skip_frames):
+                print(f"skipping frames {frame_id}")
+                self.frames_skipped.append(frame_id)
+                if len(self.frames_skipped) > 1000:
+                    self.frames_skipped = self.frames_skipped[-100:]
+                self.world.tick()
             if self.active_scenario_vehicle.get_transform().location.z < -4:
                 if not self.set_active_vehicle():
                     print("no active non scenario vehicle for 100 ticks")
@@ -309,7 +325,7 @@ class DatasetGenPerceptionModelAgent:
             if self.agent.done():
                 print("The target has been reached, stopping the simulation")
                 break
-            frame_id = self.world.get_snapshot().frame
+            
             while self.current_image_index < frame_id or self.current_rgb_image_index < frame_id:
                 time.sleep(0.1)
                 print("waiting for image sync")
@@ -318,7 +334,7 @@ class DatasetGenPerceptionModelAgent:
             for i, vel in enumerate([10,14,16,18,20,25]):
                 frame_id_iv = f"{frame_id}_{i}"
                 data.append({"frame_id": frame_id_iv, "ego_distance": previous_ego_distance, "ego_velocity": vel, "actor_distance": previous_actor_distance})
-            self.ego_vehicle.apply_control(self.agent.run_step())
+            # self.ego_vehicle.apply_control(self.agent.run_step())
             self.world.tick()
             if len(data) > 100:
                 self.save_to_csv("scenario_1.csv", data)
