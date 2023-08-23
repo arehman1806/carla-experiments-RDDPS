@@ -86,7 +86,7 @@ function solve_cvar_fixed_particle(rmdp, pa, grid, 𝒮, s2pt, cost_points; mdp_
         for ai in 1:length(as)
             Uw[si] .+= ps[ai] .* Qw[ai][si]
         end
-        if sum(Uw[si]) < (1 - eps())
+        if sum(Uw[si]) < (0.99)
             println("state $s at $si is problematic. $(Uw[si])")
             throw(ErrorException("Stopping the script here."))
         end

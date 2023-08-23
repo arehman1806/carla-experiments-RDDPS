@@ -30,12 +30,15 @@ end
 
 function POMDPs.transition(mdp::SignalizedJunctionTurnLeftMDP, s, a_required, x, rng::AbstractRNG=Random.GLOBAL_RNG)
     detected = x != 0 ? 1 : 0
-    d_ego, v_ego, d_actor, a_detected = s
+    if detected == 0 && a_required < 0
+        a_required = 0
+    end
+    d_ego, v_ego, d_actor = s
     v_ego_next = max((v_ego + a_required * mdp.dt), 0) # its speed not vel so cant get below 0
     d_ego_next = d_ego - (v_ego * mdp.dt + (0.5 * a_required * mdp.dt^2))
     d_actor_next = d_actor - mdp.speed_limit*mdp.dt
     # println("d_ego: $d_ego, v_ego: $v_ego, d_actor: $d_actor, accel: $a_required, d_ego_next: $d_ego_next, v_ego_next: $v_ego_next, detected: $detected")
-    return SparseCat([Float32[d_ego_next, v_ego_next, d_actor_next, detected]], [1])
+    return SparseCat([Float32[d_ego_next, v_ego_next, d_actor_next]], [1])
 end
 
 
@@ -68,18 +71,18 @@ end
 
 # done
 function POMDPs.isterminal(mdp::SignalizedJunctionTurnLeftMDP, s)
-    d_ego, v_ego, d_actor, a_detected = s
+    d_ego, v_ego, d_actor = s
     return d_ego <= mdp.junction_end_ego
 end
 
 function check_safety_condition(mdp:: SignalizedJunctionTurnLeftMDP, s)
-    d_ego, v_ego, d_actor, a_detected = s
+    d_ego, v_ego, d_actor = s
     return d_actor > mdp.collision_d_ll && d_actor < mdp.collision_d_ul
 end
 
 
 function check_violation_extent(mdp::SignalizedJunctionTurnLeftMDP, s)
-    d_ego, v_ego, d_actor, a_detected = s
+    d_ego, v_ego, d_actor = s
     extent = 1 - (d_actor - mdp.collision_d) / (mdp.collision_d_ul - mdp.collision_d)
     if extent >=0 && extent <= 1
         return extent
@@ -95,7 +98,7 @@ end
 
 
 function is_inside_junction(mdp::SignalizedJunctionTurnLeftMDP, s)
-    d_ego, v_ego, d_actor, a_detected = s
+    d_ego, v_ego, d_actor = s
     return d_ego <=0 && d_ego >= mdp.junction_end_ego
 end
 
@@ -122,9 +125,9 @@ function GetNaivePolicy(mdp::SignalizedJunctionTurnLeftMDP)
 end
 
 function POMDPs.action(Policy:: NaiveControlPolicy, s)
-    d_ego, v_ego, d_actor, a_detected = s
+    d_ego, v_ego, d_actor = s
     if d_ego > 0 && d_actor <= Policy.start_detection_d
-        if a_detected == 1 && is_on_collision_course(Policy, s)
+        if is_on_collision_course(Policy, s)
             # decel to stop at junction
             return required_decel_to_stop_in_d(Policy, d_ego, v_ego)
         else
@@ -133,7 +136,7 @@ function POMDPs.action(Policy:: NaiveControlPolicy, s)
         end
 
     elseif d_ego <= 0 && d_ego > Policy.in_junction_stop_th
-        if a_detected == 1 && is_on_collision_course(Policy, s)
+        if is_on_collision_course(Policy, s)
             # max decel
             return Policy.max_decel
         else
@@ -160,7 +163,7 @@ function accel_to_meet_speed_limit(Policy::NaiveControlPolicy, v)
 end
 
 function is_on_collision_course(Policy::NaiveControlPolicy, s)
-    d_ego, v_ego, d_actor, a_detected = s
+    d_ego, v_ego, d_actor = s
     t = abs(-20 - d_ego) / Policy.speed_limit
     d_actor_final = d_actor - Policy.speed_limit * t
 
