@@ -67,7 +67,7 @@ function solve_cvar_fixed_particle(rmdp, pa, grid, 𝒮, s2pt, cost_points; mdp_
 
     # Solve with backwards induction value iteration
     for (si, s) in enumerate(𝒮)
-        if si == 22
+        if si == 7
             println("560 reached")
         end
         a_dist = pa.pa(s)
@@ -86,8 +86,9 @@ function solve_cvar_fixed_particle(rmdp, pa, grid, 𝒮, s2pt, cost_points; mdp_
         for ai in 1:length(as)
             Uw[si] .+= ps[ai] .* Qw[ai][si]
         end
-        if sum(Uw[si]) < 0.9
-            # println("state $s at $si is problematic. $(Uw[si])")
+        if sum(Uw[si]) < (1 - eps())
+            println("state $s at $si is problematic. $(Uw[si])")
+            throw(ErrorException("Stopping the script here."))
         end
     end
     Uw, Qw
@@ -97,20 +98,29 @@ end
 function q_ai_si_exp!(Qw, Uw, rmdp, ai, a, si, s, grid, cost_grid)
     t = transition(rmdp, s, a)
     for (s′, p) in t
-        r = reward(rmdp, s, s′)
-        ris, rps = interpolants(cost_grid, [r])
         if isterminal(rmdp, s′)
-            
-            # println("reward for $s to $s′: $r")
+            r = reward(rmdp, s, s′)
+            ris, rps = interpolants(cost_grid, [r])
             for (ri, rp) in zip(ris, rps)
                 Qw[ai][si][ri] += p * rp
             end
         else
-            # println(s′)
-            # for (ri, rp) in zip(ris, rps)
-            #     Qw[ai][si][ri] += p * rp
-            # end
-            s′i, s′w = GridInterpolations.interpolants(grid, s2pt(s′))
+            s′i::Vector{Int}, s′w::Vector{Float64} = GridInterpolations.interpolants(grid, s2pt(s′))
+
+            # Filter out problematic indices from s′i and s′w
+            indices_to_keep = [idx for idx in 1:length(s′i) if s′i[idx] < si]
+            s′i = [s′i[idx] for idx in indices_to_keep]
+            s′w = [s′w[idx] for idx in indices_to_keep]
+
+            # Normalize s′w
+            s′w_sum = sum(s′w)
+            if s′w_sum != 0   # Avoid division by zero
+                s′w = [w / s′w_sum for w in s′w]
+            else
+                throw(ErrorException("sum is 0. no state to interpolate. this happens in state $si"))
+            end
+
+            # Now proceed with the calculations
             for (i, w) in zip(s′i, s′w)
                 Qw[ai][si] .+= p * w .* Uw[i]
             end

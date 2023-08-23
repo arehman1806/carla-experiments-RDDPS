@@ -7,6 +7,7 @@ using POMDPTools, POMDPGym, POMDPs
     start_detect_ego = 100
     collision_d_ul = 2
     collision_d_ll = -10 # if actor is in the junction until point when ego leaves, a collision has occured
+    collision_d = -1
     in_junction_stop_th::Float64 = -8 # max distance ego can stop inside the junction
     speed_limit::Float64 = 40 # applies to both ego and actor
     max_accel::Float64 = 4.6
@@ -33,7 +34,7 @@ function POMDPs.transition(mdp::SignalizedJunctionTurnLeftMDP, s, a_required, x,
     v_ego_next = max((v_ego + a_required * mdp.dt), 0) # its speed not vel so cant get below 0
     d_ego_next = d_ego - (v_ego * mdp.dt + (0.5 * a_required * mdp.dt^2))
     d_actor_next = d_actor - mdp.speed_limit*mdp.dt
-    println("d_ego: $d_ego, v_ego: $v_ego, d_actor: $d_actor, accel: $a_required, d_ego_next: $d_ego_next, v_ego_next: $v_ego_next, detected: $detected")
+    # println("d_ego: $d_ego, v_ego: $v_ego, d_actor: $d_actor, accel: $a_required, d_ego_next: $d_ego_next, v_ego_next: $v_ego_next, detected: $detected")
     return SparseCat([Float32[d_ego_next, v_ego_next, d_actor_next, detected]], [1])
 end
 
@@ -75,6 +76,23 @@ function check_safety_condition(mdp:: SignalizedJunctionTurnLeftMDP, s)
     d_ego, v_ego, d_actor, a_detected = s
     return d_actor > mdp.collision_d_ll && d_actor < mdp.collision_d_ul
 end
+
+
+function check_violation_extent(mdp::SignalizedJunctionTurnLeftMDP, s)
+    d_ego, v_ego, d_actor, a_detected = s
+    extent = 1 - (d_actor - mdp.collision_d) / (mdp.collision_d_ul - mdp.collision_d)
+    if extent >=0 && extent <= 1
+        return extent
+    end
+    extent = 1 - (mdp.collision_d - d_actor) / (mdp.collision_d - mdp.collision_d_ll)
+
+    if extent >=0 && extent <= 1
+        return extent
+    end
+
+    return 0
+end
+
 
 function is_inside_junction(mdp::SignalizedJunctionTurnLeftMDP, s)
     d_ego, v_ego, d_actor, a_detected = s

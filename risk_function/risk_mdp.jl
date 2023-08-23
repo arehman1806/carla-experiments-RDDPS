@@ -45,6 +45,11 @@ function check_safety_condition(mdp:: RMDP, s)
     return result
 end
 
+function check_violation_extent(mdp:: RMDP, s)
+    result = check_violation_extent(mdp.amdp, get_s(mdp, s))
+    return result
+end
+
 function is_inside_junction(mdp::RMDP, s)
     return is_inside_junction(mdp.amdp, get_s(mdp, s))
 end
