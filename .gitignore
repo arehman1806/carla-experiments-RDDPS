@@ -5,3 +5,7 @@ typings
 saved_models
 recording
 dataset
+dataset (copy)
+dataset_old
+
+*.png

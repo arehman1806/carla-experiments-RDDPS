@@ -26,6 +26,8 @@ from srunner.scenariomanager.scenarioatomics.atomic_trigger_conditions import Dr
 from srunner.scenarios.basic_scenario import BasicScenario
 from srunner.tools.scenario_helper import generate_target_waypoint
 
+import srunner.scenariomanager.scenarioatomics.atomic_trigger_conditions as conditions
+
 
 class SignalizedJunctionLeftTurn(BasicScenario):
 
@@ -144,6 +146,39 @@ class SignalizedJunctionLeftTurn(BasicScenario):
         criteria.append(collison_criteria)
 
         return criteria
+
+    def _setup_scenario_trigger(self, config):
+        """
+        This function creates a trigger maneuver, that has to be finished before the real scenario starts.
+        This implementation focuses on the first available ego vehicle.
+
+        The function can be overloaded by a user implementation inside the user-defined scenario class.
+        """
+        start_location = None
+        if config.trigger_points and config.trigger_points[0]:
+            start_location = config.trigger_points[0].location     # start location of the scenario
+
+        ego_vehicle_route = CarlaDataProvider.get_ego_vehicle_route()
+
+        if start_location:
+            if ego_vehicle_route:
+                if config.route_var_name is None:  # pylint: disable=no-else-return
+                    return conditions.InTriggerDistanceToLocationAlongRoute(self.ego_vehicles[0],
+                                                                            ego_vehicle_route,
+                                                                            start_location,
+                                                                            5)
+                else:
+                    check_name = "WaitForBlackboardVariable: {}".format(config.route_var_name)
+                    return conditions.WaitForBlackboardVariable(name=check_name,
+                                                                variable_name=config.route_var_name,
+                                                                variable_value=True,
+                                                                var_init_value=False)
+
+            return conditions.InTimeToArrivalToLocation(self.ego_vehicles[0],
+                                                        2.0,
+                                                        start_location)
+
+        return None
 
     def __del__(self):
         self._traffic_light = None

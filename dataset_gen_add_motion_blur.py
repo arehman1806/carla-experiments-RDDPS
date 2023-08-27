@@ -37,7 +37,7 @@ def process_single_image(filename, record, counter, total, lock):
     frame = os.path.splitext(filename)[0]
     for index in range(0, 3):
         # Use the alternative_radial_blur method
-        blurred_image = alternative_radial_blur(image_rgb, blur=(0.01/3)*index)
+        blurred_image = alternative_radial_blur(image_rgb, blur=(0.02/3)*index)
         cv2.imwrite(os.path.join(rgb_folder, "{}_{}.png".format(frame, index)), blurred_image)
     os.remove(filepath_rgb)
 

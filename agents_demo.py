@@ -27,12 +27,15 @@ settings = world.get_settings()
 settings.synchronous_mode = True
 settings.fixed_delta_seconds = 0.1  # 0.05 seconds (20 FPS)
 world.apply_settings(settings)
+# weather = carla.WeatherParameters(
+#     cloudiness=01.0,
+#     precipitation=30.0,
+#     sun_altitude_angle=90.0,
+#     fog_density=90,
+#     fog_distance=10)
+
 weather = carla.WeatherParameters(
-    cloudiness=01.0,
-    precipitation=30.0,
-    sun_altitude_angle=90.0,
-    fog_density=90,
-    fog_distance=10)
+    sun_altitude_angle=90.0)
 
 world.set_weather(weather)
 
@@ -46,9 +49,6 @@ def process_img(image):
 
 
 annotated_image_queue = []
-
-
-
 
 ego_vehicle = None
 

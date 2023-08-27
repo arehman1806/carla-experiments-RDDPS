@@ -50,7 +50,7 @@ class DatasetGenPerceptionModel(BasicScenario):
         
         self._ego_vehicle = ego_vehicles[0]
         
-
+        
         # Call constructor of BasicScenario
         super(DatasetGenPerceptionModel, self).__init__(
           "DatasetGenSurogateModel",
@@ -62,6 +62,8 @@ class DatasetGenPerceptionModel(BasicScenario):
 
         
     def _initialize_actors(self, config):
+        self.scenario_id = config.name[-1]
+        print(f"scenario id is {self.scenario_id}")
         self._ego_vehicle.set_simulate_physics(enabled=False)
         self._traffic_light = CarlaDataProvider.get_next_traffic_light(self._ego_vehicle, False)
         self._traffic_light.set_state(carla.TrafficLightState.Red)
@@ -74,7 +76,7 @@ class DatasetGenPerceptionModel(BasicScenario):
             ego_stop_pts[0].transform.rotation
         )
         self._ego_vehicle.set_transform(ego_new_tranform)
-        self._ego_vehicle.set_simulate_physics(enabled=True)
+        self._ego_vehicle.set_simulate_physics(enabled=False)
         other_tls = CarlaDataProvider.annotate_trafficlight_in_group(self._traffic_light)
         right_tl = other_tls["right"][0]
         opp = other_tls["opposite"][0]
@@ -91,7 +93,7 @@ class DatasetGenPerceptionModel(BasicScenario):
 
         # add actors from xml file
         for actor in config.other_actors:
-            vehicle = CarlaDataProvider.request_new_actor(actor.model, actor.transform)
+            vehicle = CarlaDataProvider.request_new_actor(actor.model, actor.transform, color="238, 235, 217")
             if vehicle is None:
                 raise Exception(f"Error adding other actor: {actor}")
             vehicle.rolename = "idle"
@@ -144,12 +146,12 @@ class DatasetGenPerceptionModel(BasicScenario):
         
         
         sequence.add_child(weather)
-        for actor in self.other_actors:
+        for actor in self.other_actors[0:]:
             actor.rolename = "abc"
 
-            for route in self._other_routes:
+            for route in self._other_routes[0:]:
 
-                for ego_spawn_point in self._ego_points:
+                for ego_spawn_point in self._ego_points[0:]:
                     ego_transform_setter = ActorTransformSetter(self._ego_vehicle, ego_spawn_point.transform, False)
                     actor_transform_setter = ActorTransformSetter(actor, route[0].transform)
                     wpf = WaypointFollower(actor, 25, [(route[1], RoadOption.LANEFOLLOW)])
@@ -186,19 +188,30 @@ class DatasetGenPerceptionModel(BasicScenario):
         right_tl_stop_point = right_tl_stop_points[pt_i]
         plan, _ = generate_target_waypoint_list(right_tl_stop_point, 0)
         left_tl_stop_point = plan[-1][0]
-        CarlaDataProvider._world.debug.draw_string(current_tl_stop_point.transform.location, 'turn_left_start', draw_shadow=False,
-                                        color=carla.Color(r=255, g=0, b=0), life_time=1e9,
-                                        persistent_lines=True)
-        CarlaDataProvider._world.debug.draw_string(left_tl_stop_point.transform.location, 'turn_left_stop', draw_shadow=False,
-                                        color=carla.Color(r=0, g=255, b=0), life_time=1e9,
-                                        persistent_lines=True)
+        # CarlaDataProvider._world.debug.draw_string(current_tl_stop_point.transform.location, 'turn_left_start', draw_shadow=False,
+        #                                 color=carla.Color(r=255, g=0, b=0), life_time=-1,
+        #                                 persistent_lines=True)
+        # CarlaDataProvider._world.debug.draw_string(left_tl_stop_point.transform.location, 'turn_left_stop', draw_shadow=False,
+        #                                 color=carla.Color(r=0, g=255, b=0), life_time=-1,
+        #                                 persistent_lines=True)
         
-        route = interpolate_wp_trajectory(CarlaDataProvider._world, [current_tl_stop_point, left_tl_stop_point], 4)[:5]
+        len_calc_route = interpolate_wp_trajectory(CarlaDataProvider._world, [current_tl_stop_point, left_tl_stop_point], 1)
+        for traj_point in len_calc_route:
+            point = traj_point[0]
+            # CarlaDataProvider._world.debug.draw_point(point.transform.location)
+
+        len_route = len(len_calc_route)
+        print(f"ego has to tavel {len_route}m inside the junction")
+        if self.scenario_id == "4":
+            route = interpolate_wp_trajectory(CarlaDataProvider._world, [current_tl_stop_point, left_tl_stop_point], 5)[:3]
+        else:
+            route = interpolate_wp_trajectory(CarlaDataProvider._world, [current_tl_stop_point, left_tl_stop_point], 5)[:4]
+
         ego_points.extend([point[0] for point in route])
         
-        previous_pts = current_tl_stop_point.previous(20)
+        previous_pts = current_tl_stop_point.previous(30)
         previous_pts.extend([current_tl_stop_point])
-        route = interpolate_wp_trajectory(CarlaDataProvider._world, previous_pts,4 )
+        route = interpolate_wp_trajectory(CarlaDataProvider._world, previous_pts,10 )
         ego_points.extend([point[0] for point in route])
         for point in ego_points:
             CarlaDataProvider._world.debug.draw_string(point.transform.location, 'tlj', draw_shadow=False,
@@ -225,6 +238,9 @@ class DatasetGenPerceptionModel(BasicScenario):
         first_wp = list_of_waypoints[-int(len_points / 3)]
         plan, _ = generate_target_waypoint_list(waypoint, 0)
         end_wp = [point[0] for point in plan][-1]
+        distance = waypoint.transform.location.distance(end_wp.transform.location)
+        print(f"actor has to travel {distance}m inside the junction")
+        # CarlaDataProvider._world.debug.draw_arrow(waypoint.transform.location, end_wp.transform.location)
         return [first_wp, end_wp]
     
     def generate_actor_start_end_points(self):
@@ -234,12 +250,12 @@ class DatasetGenPerceptionModel(BasicScenario):
         
         for route in routes:
             start, end  = route
-            CarlaDataProvider._world.debug.draw_string(start.transform.location, 'O', draw_shadow=False,
-                                        color=carla.Color(r=0, g=255, b=0), life_time=1e9,
-                                        persistent_lines=True)
-            CarlaDataProvider._world.debug.draw_string(end.transform.location, 'x', draw_shadow=False,
-                                        color=carla.Color(r=255, g=0, b=0), life_time=1e9,
-                                        persistent_lines=True)
+            # CarlaDataProvider._world.debug.draw_string(start.transform.location, 'O', draw_shadow=False,
+            #                             color=carla.Color(r=0, g=255, b=0), life_time=1e9,
+            #                             persistent_lines=True)
+            # CarlaDataProvider._world.debug.draw_string(end.transform.location, 'x', draw_shadow=False,
+            #                             color=carla.Color(r=255, g=0, b=0), life_time=1e9,
+            #                             persistent_lines=True)
         return routes
 
     

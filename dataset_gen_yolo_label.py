@@ -4,6 +4,7 @@ import os
 import sys
 from pathlib import Path
 from multiprocessing import Pool as ProcessPool
+import shutil
 
 import pandas as pd
 
@@ -179,6 +180,12 @@ def main():
                                     args.semantic_camera)
     # print("Process {} - {}".format(record_name, vehicle_name))
     yolo_label_tool.process(rawdata_df)
+
+    src_csv_path = os.path.join(RAW_DATA_PATH, record_name, "states.csv")
+    dst_csv_path = os.path.join(DATASET_PATH, "states.csv")
+    
+    if os.path.exists(src_csv_path):
+        shutil.copy(src_csv_path, dst_csv_path)
 
 
 if __name__ == '__main__':

@@ -45,6 +45,7 @@ class BasicScenario(object):
         self.ego_vehicles = ego_vehicles
         self.name = name
         self.config = config
+        # print(f"name is {config.name}")
         self.terminate_on_failure = terminate_on_failure
 
         self._initialize_environment(world)

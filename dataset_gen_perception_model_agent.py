@@ -19,17 +19,23 @@ from collections import deque
 import copy
 import csv
 import os
+import subprocess
 
 
 class DatasetGenPerceptionModelAgent:
 
-    def __init__(self) -> None:
+    def __init__(self, start_timestamp, scenario_name, ego_junction_distance, actor_junction_distance) -> None:
         # Connect to the server
         self.client = carla.Client('localhost', 2000)
         self.client.set_timeout(10.0)  # seconds
         # Get the world
         self.world = self.client.get_world()
 
+        # remove stationary env vehicles:
+        env_objs = self.world.get_environment_objects(carla.CityObjectLabel.Vehicles)
+        objects_to_toggle = {car.id for car in env_objs}
+        self.world.enable_environment_objects(objects_to_toggle, False)
+        
         self.map = self.world.get_map()
         self.dummy_tick = False
 
@@ -37,7 +43,11 @@ class DatasetGenPerceptionModelAgent:
         self.current_rgb_image_index = 0
         self.data_collection_started = False
         self.frames_skipped = []
-        self.start_timestamp = time.time()
+        self.start_timestamp = start_timestamp
+        self.scenario_name = scenario_name
+        self.ego_junction_distance = ego_junction_distance
+        self.actor_junction_distance = actor_junction_distance
+        self.no_skipped_frames = 6
         dir_path = f"./recording/{self.start_timestamp}"
         if not os.path.exists(dir_path):
             os.makedirs(dir_path, exist_ok=True)  # Create directory if it doesn't exist
@@ -152,17 +162,18 @@ class DatasetGenPerceptionModelAgent:
         #     self.dummy_tick = False
         #     return
         frame_id = image.frame
-        if not self.data_collection_started or frame_id in self.frames_skipped:
-            print(f"skipping img frame {frame_id}")
+        image_file_name = f"{self.scenario_name}_{frame_id}"
+        if not self.data_collection_started or not self.keep_frame(frame_id):
+            # print(f"skipping img frame {frame_id}")
             return
         
         if rgb:
-            print(f"RGB image frame: {frame_id}")
-            image.save_to_disk(f"./recording/{self.start_timestamp}/rgb/{frame_id}.png")
+            # print(f"RGB image frame: {frame_id}")
+            image.save_to_disk(f"./recording/{self.start_timestamp}/rgb/{image_file_name}.png")
             self.current_rgb_image_index = frame_id
         else:
-            print(f"image frame: {frame_id}")
-            image.save_to_disk(f"./recording/{self.start_timestamp}/instance/{frame_id}.png")
+            # print(f"image frame: {frame_id}")
+            image.save_to_disk(f"./recording/{self.start_timestamp}/instance/{image_file_name}.png")
             self.current_image_index = frame_id
 
     def get_traffic_lights(self) -> Tuple[carla.TrafficLight, carla.TrafficLight]:
@@ -189,9 +200,12 @@ class DatasetGenPerceptionModelAgent:
         return ego_vehicle, non_ego
     
     def set_active_vehicle(self):
-        for i in range(10):
+        for i in range(100):
             for vehicle in self.other_vehicles:
-                if vehicle.get_transform().location.z > 0:
+                # print(vehicle.get_transform().location)
+                if vehicle.get_transform().location.z > -3:
+                    if vehicle.get_transform().location.x == 0 and vehicle.get_transform().location.y == 0:
+                        return False
                     self.active_scenario_vehicle = vehicle
                     print(f"found after {i} ticks")
                     return True
@@ -289,18 +303,23 @@ class DatasetGenPerceptionModelAgent:
         return point_img[0:2]
 
     
-    def save_to_csv(self, filename, data_list):
-        file_exists = os.path.isfile(filename)
-        headers = ['frame_id', 'ego_distance', 'ego_velocity', 'actor_distance']
-        with open(filename, 'a') as csvfile:
+    def save_to_csv(self, data_list, filename="states.csv"):
+        filepath = f"./recording/{self.start_timestamp}/{filename}"
+        file_exists = os.path.isfile(filepath)
+        headers = ['image_file_name', 'ego_distance', 'ego_velocity', 'actor_distance', 'ego_junction_distance', 'actor_junction_distance']
+        with open(filepath, 'a') as csvfile:
             writer = csv.DictWriter(csvfile, delimiter=',', lineterminator='\n', fieldnames=headers)
             if not file_exists:
                 writer.writeheader()
             for data in data_list:
                 writer.writerow(data)
 
+    def keep_frame(self, frame_id):
+        if (frame_id - self.starting_frame) % self.no_skipped_frames == 0:
+            return True
+        return False
+
     def start_data_collection(self):
-        skip_frames = 2
         data = []
         # Setting the light to green is the trigger for scenario. See DatasetGenSurrogateModel scenario
         self.ego_traffic_light.set_state(carla.TrafficLightState.Green)
@@ -308,19 +327,19 @@ class DatasetGenPerceptionModelAgent:
         count = 0
         previous_ego_distance, previous_actor_distance = 0, 0
 
+        self.starting_frame = self.world.get_snapshot().frame
         self.data_collection_started = True
         while True:
-            frame_id = self.world.get_snapshot().frame
-            for _ in range(0, skip_frames):
-                print(f"skipping frames {frame_id}")
-                self.frames_skipped.append(frame_id)
-                if len(self.frames_skipped) > 1000:
-                    self.frames_skipped = self.frames_skipped[-100:]
-                self.world.tick()
             if self.active_scenario_vehicle.get_transform().location.z < -4:
                 if not self.set_active_vehicle():
                     print("no active non scenario vehicle for 100 ticks")
                     break
+            
+            frame_id = self.world.get_snapshot().frame
+            if not self.keep_frame(frame_id):
+                # print(f"skipping frame {frame_id}")
+                self.world.tick()
+                continue
             
             if self.agent.done():
                 print("The target has been reached, stopping the simulation")
@@ -328,29 +347,107 @@ class DatasetGenPerceptionModelAgent:
             
             while self.current_image_index < frame_id or self.current_rgb_image_index < frame_id:
                 time.sleep(0.1)
-                print("waiting for image sync")
-            print(f"current frame: ", frame_id)
+                # print("waiting for image sync")
+            # print(f"current frame: ", frame_id)
             previous_ego_distance, previous_actor_distance = self.get_state()
-            for i, vel in enumerate([10,14,16,18,20,25]):
-                frame_id_iv = f"{frame_id}_{i}"
-                data.append({"frame_id": frame_id_iv, "ego_distance": previous_ego_distance, "ego_velocity": vel, "actor_distance": previous_actor_distance})
+            for i, vel in enumerate([10,15,25]):
+                image_file_name = f"{self.scenario_name}_{frame_id}_{i}"
+                data.append({"image_file_name": image_file_name, "ego_distance": previous_ego_distance, "ego_velocity": vel, "actor_distance": previous_actor_distance,
+                             "ego_junction_distance": self.ego_junction_distance, "actor_junction_distance": self.actor_junction_distance })
             # self.ego_vehicle.apply_control(self.agent.run_step())
             self.world.tick()
             if len(data) > 100:
-                self.save_to_csv("scenario_1.csv", data)
+                self.save_to_csv(data)
                 data = []
             # time.sleep(0.1)
-        self.save_to_csv("scenario_1.csv", data)
+        self.save_to_csv(data)
         self.sensor.destroy()
+    
+    def read_csv_frames(self, filename="states.csv"):
+        filepath = f"./recording/{self.start_timestamp}/{filename}"
+        if not os.path.exists(filepath):
+            return []
+        
+        frames = []
+        with open(filepath, 'r') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                frames.append(row['image_file_name'][:-2])
+        return frames
+
+    def get_saved_frames(self, directory_name):
+        dir_path = f"./recording/{self.start_timestamp}/{directory_name}"
+        if not os.path.exists(dir_path):
+            return []
+        
+        frames = [filename.split('.')[0] for filename in os.listdir(dir_path) if filename.endswith('.png')]
+        return frames
+    
+    def delete_csv_entry(self, frame_id, filename="states.csv"):
+        filepath = f"./recording/{self.start_timestamp}/{filename}"
+        if not os.path.exists(filepath):
+            return
+
+        with open(filepath, 'r') as csvfile:
+            lines = csvfile.readlines()
+        with open(filepath, 'w') as csvfile:
+            for line in lines:
+                if line.split(',')[0] != str(frame_id):
+                    csvfile.write(line)
+    
+    
+    def verify_and_delete_mismatched_frames(self):
+        csv_frames = self.read_csv_frames()
+        saved_instance_frames = self.get_saved_frames("instance")
+        saved_rgb_frames = self.get_saved_frames("rgb")
+
+        # Frames present in CSV but not in the saved images
+        for frame in csv_frames:
+            if frame not in saved_instance_frames:
+                # Deleting CSV entry
+                self.delete_csv_entry(frame)
+            if frame not in saved_rgb_frames:
+                # Deleting CSV entry
+                self.delete_csv_entry(frame)
+
+        # Frames present in saved images but not in the CSV
+        for frame in saved_instance_frames:
+            if frame not in csv_frames:
+                os.remove(f"./recording/{self.start_timestamp}/instance/{frame}.png")
+        
+        for frame in saved_rgb_frames:
+            if frame not in csv_frames:
+                os.remove(f"./recording/{self.start_timestamp}/rgb/{frame}.png")
+
+
+
     
     def cleanup(self):
         CarlaDataProvider.cleanup()
         self.sensor.destroy()
 
 if __name__ == "__main__":
-    datasetgenerator = DatasetGenPerceptionModelAgent()
+    junction_params = {
+        1: [32, 31],
+        2: [32, 32],
+        3: [33, 37],
+        4: [31, 36]
+    }
+    start_record_name = time.time()
+    # start_record_name = 1692972761.6824503
     try:
-        datasetgenerator.start_data_collection()
+        for i in range(1, 5):
+            scenario_name = f"DatasetGenPerceptionModel_{i}"
+            junction_param = junction_params.get(i)
+            print(f"starting scenario: {scenario_name}")
+            subprocess.Popen(["python3", "./scenario_runner/scenario_runner.py", "--scenario", scenario_name, "--reloadWorld"])
+            time.sleep(10)
+            print("scenario started")
+            print("starting data collection")
+            datasetgenerator = DatasetGenPerceptionModelAgent(start_record_name, scenario_name, junction_param[0], junction_param[1])
+            datasetgenerator.start_data_collection()
+            time.sleep(5)
+        datasetgenerator.verify_and_delete_mismatched_frames()
     except KeyboardInterrupt:
         
         datasetgenerator.cleanup()

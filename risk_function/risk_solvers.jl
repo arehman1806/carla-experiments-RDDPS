@@ -67,7 +67,47 @@ function solve_cvar_fixed_particle(rmdp, pa, grid, 𝒮, s2pt, cost_points; mdp_
 
     # Solve with backwards induction value iteration
     for (si, s) in enumerate(𝒮)
-        if si == 7
+        if si == 1691
+            println("560 reached")
+        end
+        a_dist = pa.pa(s)
+        as = support(a_dist)
+        ps = a_dist.p
+        # si % 1000 == 0 ? println(si) : nothing
+        for (ai, a) in enumerate(as)
+            if mdp_type == :gen
+                q_ai_si_gen!(Qw, Uw, rmdp, ai, a, si, s, grid, cost_grid; ngen, s2pt)
+            elseif mdp_type == :exp
+                q_ai_si_exp!(Qw, Uw, rmdp, ai, a, si, s, grid, cost_grid)
+            else
+                error("Invalid MDP type")
+            end
+        end
+        for ai in 1:length(as)
+            Uw[si] .+= ps[ai] .* Qw[ai][si]
+        end
+        if sum(Uw[si]) < (0.99)
+            println("state $s at $si is problematic. $(Uw[si])")
+            throw(ErrorException("Stopping the script here."))
+        end
+    end
+    Uw, Qw
+end
+
+function solve_cvar_fixed_particle_forward_induction(rmdp, pa, grid, 𝒮, s2pt, cost_points; mdp_type=:gen, ngen=1, Uw=nothing, Qw=nothing)
+    # as = support(pa)
+    # ps = pa.p
+    as = action_space(pa).vals
+    N = length(cost_points)
+    cost_grid = RectangleGrid(cost_points)
+    if Uw === nothing || Qw === nothing
+        Uw = [zeros(N) for i = 1:length(𝒮)] # Values
+        Qw = [[zeros(N) for i = 1:length(𝒮)] for a in as] # state-ation values
+    end
+
+    # Solve with backwards induction value iteration
+    for (si, s) in enumerate(𝒮)
+        if si == 1691
             println("560 reached")
         end
         a_dist = pa.pa(s)
@@ -109,6 +149,9 @@ function q_ai_si_exp!(Qw, Uw, rmdp, ai, a, si, s, grid, cost_grid)
 
             # Filter out problematic indices from s′i and s′w
             indices_to_keep = [idx for idx in 1:length(s′i) if s′i[idx] < si]
+            if length(s′i) > length(indices_to_keep)
+                println("state $si is problematic: $(length(indices_to_keep)) vs $(length(s′i))")
+            end
             s′i = [s′i[idx] for idx in indices_to_keep]
             s′w = [s′w[idx] for idx in indices_to_keep]
 
