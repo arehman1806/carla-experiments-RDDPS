@@ -160,8 +160,8 @@ px_rs = StateDependentDistributionPolicy(get_detect_dist_rs, DiscreteSpace(noise
 bl = []
 risk = []
 sim = RolloutSimulator()
-for i in 1:1000
-    if i % 100 == 0
+for i in 1:10000
+    if i % 500 == 0
         println("i = $i")
     end
     s0 = get_initial_state()
@@ -176,4 +176,7 @@ count_bl = sum(bl)
 count_risk = sum(risk)
 
 # Plot the bar chart
-bar(["BL", "Risk"], [count_bl, count_risk], legend=false, title="Number of 1s in BL and Risk", ylabel="Count")
+b = bar(["Baseline", "Risk"], [count_bl, count_risk], legend=false, title="Number of collisions", ylabel="Count")#
+display(b)
+
+print("collisions:\nbaseline: $count_bl\nrisk:$count_risk")
