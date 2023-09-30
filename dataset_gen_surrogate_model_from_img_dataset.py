@@ -31,11 +31,11 @@ def get_file_path(base_dir, filename):
             return os.path.join(base_dir, subdir, filename)
     return None
 # Read the CSV file using pandas
-df = pd.read_csv('./carla/states.csv')
+df = pd.read_csv('../dataset/states.csv')
 
 # Base directories
-image_base_dir = './carla/images/'
-label_base_dir = './carla/labels/'
+image_base_dir = '../dataset/images/'
+label_base_dir = '../dataset/labels/'
 
 # Initialize CarlaObjectDetector
 detector = CarlaObjectDetector()
@@ -89,4 +89,4 @@ for index, row in df.iterrows():
             df.at[index, 'detected'] = 1 if max_iou_for_image > iou_threshold else 0
 
 # Save the updated dataframe to a new CSV file
-df.to_csv('surrogate_risk_model_dataset.csv', index=False)
+df.to_csv('surrogate_risk_old_model_dataset.csv', index=False)

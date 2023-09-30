@@ -1,9 +1,7 @@
-# Import necessary modules from CARLA
 import carla
 import random
 import time
 from agents.navigation.stand_still_agent import StandStillAgent
-from agents.navigation.rddps_agent import RDDPSAgent
 from scenario_runner.srunner.scenariomanager.carla_data_provider import CarlaDataProvider
 
 import numpy as np
@@ -20,6 +18,7 @@ import copy
 import csv
 import os
 import subprocess
+from scenario_runner.srunner.tools.route_manipulation import interpolate_trajectory, interpolate_wp_trajectory
 
 
 class DatasetGenPerceptionModelAgent:
@@ -27,7 +26,7 @@ class DatasetGenPerceptionModelAgent:
     def __init__(self, start_timestamp, scenario_name, ego_junction_distance, actor_junction_distance) -> None:
         # Connect to the server
         self.client = carla.Client('localhost', 2000)
-        self.client.set_timeout(10.0)  # seconds
+        self.client.set_timeout(1000.0)  # seconds
         # Get the world
         self.world = self.client.get_world()
 
@@ -47,19 +46,15 @@ class DatasetGenPerceptionModelAgent:
         self.scenario_name = scenario_name
         self.ego_junction_distance = ego_junction_distance
         self.actor_junction_distance = actor_junction_distance
-        self.no_skipped_frames = 6
+        self.no_skipped_frames = 0
         dir_path = f"./recording/{self.start_timestamp}"
         if not os.path.exists(dir_path):
             os.makedirs(dir_path, exist_ok=True)  # Create directory if it doesn't exist
 
 
-
-        self.camera_image_queue = deque()
         self.ego_vehicle, self.other_vehicles = self.get_ego_and_other_vehicles()
         self.active_scenario_vehicle = self.other_vehicles[0]
         self.agent = StandStillAgent(self.ego_vehicle)
-        # destination = carla.Location(x=-77.6, y=60, z=0)
-        # self.agent.set_destination(destination)
 
         # spawn the sensor and attach to vehicle.
         blueprint_library = self.world.get_blueprint_library()
@@ -75,8 +70,8 @@ class DatasetGenPerceptionModelAgent:
         cam_bp = blueprint_library.find('sensor.camera.rgb')
         cam_bp.set_attribute('image_size_x', '608')
         cam_bp.set_attribute('image_size_y', '608')
-        cam_bp.set_attribute('motion_blur_intensity', '1')
-        cam_bp.set_attribute('motion_blur_max_distortion', '1')
+        # cam_bp.set_attribute('motion_blur_intensity', '1')
+        # cam_bp.set_attribute('motion_blur_max_distortion', '1')
         sensor_transform = carla.Transform(carla.Location(x=2.5, z=2))
         self.rgb_sensor = self.world.spawn_actor(cam_bp, sensor_transform, attach_to=self.ego_vehicle)
         self.rgb_sensor.listen(lambda image: self.process_img(image, rgb=True))
@@ -118,7 +113,7 @@ class DatasetGenPerceptionModelAgent:
         # Set the world in synchronous mode
         settings = self.world.get_settings()
         settings.synchronous_mode = True
-        settings.fixed_delta_seconds = 0.05  # 0.05 seconds (20 FPS)
+        settings.fixed_delta_seconds = 0.1  # 0.05 seconds (20 FPS)
         self.world.apply_settings(settings)
     
     def get_junction_stop_point(self, current_tl_stop_point):
@@ -152,9 +147,6 @@ class DatasetGenPerceptionModelAgent:
     
     def process_img(self, image: carla.Image, rgb=False):
         # Convert the image from CARLA format to an OpenCV image (RGB)
-        # if self.dummy_tick:
-        #     self.dummy_tick = False
-        #     return
         frame_id = image.frame
         image_file_name = f"{self.scenario_name}_{frame_id}"
         if not self.data_collection_started or not self.keep_frame(frame_id):
@@ -178,8 +170,6 @@ class DatasetGenPerceptionModelAgent:
     
     def get_ego_and_other_vehicles(self) -> Tuple[carla.Vehicle, List[carla.Actor]]:
         ego_vehicle = None
-
-        # Get the ego vehicle
         while ego_vehicle is None:
             print("Waiting for the ego vehicle...")
             time.sleep(1)
@@ -194,7 +184,7 @@ class DatasetGenPerceptionModelAgent:
         return ego_vehicle, non_ego
     
     def set_active_vehicle(self):
-        for i in range(100):
+        for i in range(10000):
             for vehicle in self.other_vehicles:
                 # print(vehicle.get_transform().location)
                 if vehicle.get_transform().location.z > -3:
@@ -207,15 +197,6 @@ class DatasetGenPerceptionModelAgent:
             self.world.tick()
         return False
 
-    def annotatate_with_junction(self, camera_image, bbox):
-        for i in range(len(bbox) - 1):
-            p1 = bbox[i]
-            p2 = bbox[i+1]
-            cv2.line(camera_image, (int(p1[0]),int(p1[1])), (int(p2[0]),int(p2[1])), (0,0,255, 255), 1)
-        p1 = bbox[0]
-        p2 = bbox[len(bbox) - 1]
-        cv2.line(camera_image, (int(p1[0]),int(p1[1])), (int(p2[0]),int(p2[1])), (0,0,255, 255), 1)
-        return camera_image
     
     def get_state(self):
         other_vehicle_loc = self.active_scenario_vehicle.get_location()
@@ -226,75 +207,13 @@ class DatasetGenPerceptionModelAgent:
         
         ego_loc = self.ego_vehicle.get_location()
         ego_wp = self.map.get_waypoint(ego_loc)
-        ego_distance = ego_loc.distance(self.ego_stop_pt.transform.location)
+        # ego_distance = ego_loc.distance(self.ego_stop_pt.transform.location)
+        ego_distance = len(interpolate_wp_trajectory(self.world, [ego_wp, self.ego_stop_pt], 1))
         if ego_wp.is_junction:
-            ego_distance = -ego_distance
+            ego_distance = -len(interpolate_wp_trajectory(self.world, [self.ego_stop_pt, ego_wp], 1))
+        
         
         return ego_distance, actor_distance
-    
-    def get_ground_truth(self):
-        # Get the camera matrix 
-        world_2_camera = np.array(self.sensor.get_transform().get_inverse_matrix())
-        bb = self.active_scenario_vehicle.bounding_box
-        # p1 = self.get_image_point(bb.location, self.K, world_2_camera)
-        verts = [v for v in bb.get_world_vertices(self.active_scenario_vehicle.get_transform())]
-        x_max = -10000
-        x_min = 10000
-        y_max = -10000
-        y_min = 10000
-
-        for vert in verts:
-            p = self.get_image_point(vert, self.K, world_2_camera)
-            # Find the rightmost vertex
-            if p[0] > x_max:
-                x_max = p[0]
-            # Find the leftmost vertex
-            if p[0] < x_min:
-                x_min = p[0]
-            # Find the highest vertex
-            if p[1] > y_max:
-                y_max = p[1]
-            # Find the lowest  vertex
-            if p[1] < y_min:
-                y_min = p[1]
-        return (x_min, y_min, x_max, y_max)
-
-
-    def draw_bb_on_image(self, xyxy, img):
-        x_min, y_min, x_max, y_max = xyxy
-        cv2.line(img, (int(x_min),int(y_min)), (int(x_max),int(y_min)), (0,0,255, 255), 1)
-        cv2.line(img, (int(x_min),int(y_max)), (int(x_max),int(y_max)), (0,0,255, 255), 1)
-        cv2.line(img, (int(x_min),int(y_min)), (int(x_min),int(y_max)), (0,0,255, 255), 1)
-        cv2.line(img, (int(x_max),int(y_min)), (int(x_max),int(y_max)), (0,0,255, 255), 1)
-
-    def build_projection_matrix(self, w, h, fov):
-        focal = w / (2.0 * np.tan(fov * np.pi / 360.0))
-        K = np.identity(3)
-        K[0, 0] = K[1, 1] = focal
-        K[0, 2] = w / 2.0
-        K[1, 2] = h / 2.0
-        return K
-    
-    def get_image_point(self, loc, K, w2c):
-        # Calculate 2D projection of 3D coordinate
-
-        # Format the input coordinate (loc is a carla.Position object)
-        point = np.array([loc.x, loc.y, loc.z, 1])
-        # transform to camera coordinates
-        point_camera = np.dot(w2c, point)
-
-        # New we must change from UE4's coordinate system to an "standard"
-        # (x, y ,z) -> (y, -z, x)
-        # and we remove the fourth componebonent also
-        point_camera = [point_camera[1], -point_camera[2], point_camera[0]]
-
-        # now project 3D->2D using the camera matrix
-        point_img = np.dot(K, point_camera)
-        # normalize
-        point_img[0] /= point_img[2]
-        point_img[1] /= point_img[2]
-
-        return point_img[0:2]
 
     
     def save_to_csv(self, data_list, filename="states.csv"):
@@ -309,6 +228,8 @@ class DatasetGenPerceptionModelAgent:
                 writer.writerow(data)
 
     def keep_frame(self, frame_id):
+        if self.no_skipped_frames == 0:
+            return True
         if (frame_id - self.starting_frame) % self.no_skipped_frames == 0:
             return True
         return False
@@ -316,6 +237,7 @@ class DatasetGenPerceptionModelAgent:
     def start_data_collection(self):
         data = []
         # Setting the light to green is the trigger for scenario. See DatasetGenSurrogateModel scenario
+        self.ego_traffic_light.freeze(False)
         self.ego_traffic_light.set_state(carla.TrafficLightState.Green)
         print("Triggered the light")
         count = 0
@@ -342,19 +264,7 @@ class DatasetGenPerceptionModelAgent:
             while self.current_image_index < frame_id or self.current_rgb_image_index < frame_id:
                 time.sleep(0.1)
                 # print("waiting for image sync")
-            # print(f"current frame: ", frame_id)
-            previous_ego_distance, previous_actor_distance = self.get_state()
-            for i, vel in enumerate([10,15,25]):
-                image_file_name = f"{self.scenario_name}_{frame_id}_{i}"
-                data.append({"image_file_name": image_file_name, "ego_distance": previous_ego_distance, "ego_velocity": vel, "actor_distance": previous_actor_distance,
-                             "ego_junction_distance": self.ego_junction_distance, "actor_junction_distance": self.actor_junction_distance })
-            # self.ego_vehicle.apply_control(self.agent.run_step())
             self.world.tick()
-            if len(data) > 100:
-                self.save_to_csv(data)
-                data = []
-            # time.sleep(0.1)
-        self.save_to_csv(data)
         self.sensor.destroy()
     
     def read_csv_frames(self, filename="states.csv"):
@@ -421,28 +331,45 @@ class DatasetGenPerceptionModelAgent:
         self.sensor.destroy()
 
 if __name__ == "__main__":
+    import subprocess
+    import os
+    import signal
     junction_params = {
-        1: [32, 31],
-        2: [32, 32],
-        3: [33, 37],
-        4: [31, 36]
+        1: [30, 31],
+        2: [30, 32],
+        3: [31, 37],
+        4: [29, 36]
     }
     start_record_name = time.time()
-    # start_record_name = 1692972761.6824503
+    start_record_name = "new_dataset"
     try:
         for i in range(1, 5):
-            scenario_name = f"DatasetGenPerceptionModel_{i}"
+            # carla_simulator = subprocess.Popen("/opt/carla-simulator/CarlaUE4.sh -prefernvidia", shell=True, preexec_fn=os.setsid)
+            # print("waiting for simulator startup")
+            # time.sleep(20)
+            scenario_name = f"DatasetGenPerceptionModelRS_{i}"
             junction_param = junction_params.get(i)
             print(f"starting scenario: {scenario_name}")
-            subprocess.Popen(["python3", "./scenario_runner/scenario_runner.py", "--scenario", scenario_name, "--reloadWorld"])
-            time.sleep(10)
+            # scenario = subprocess.Popen(["python3", "./scenario_runner/scenario_runner.py", "--scenario", scenario_name, "--reloadWorld"], preexec_fn=os.setsid)
+            print("waiting for scenario to start")
+            # time.sleep(30)
             print("scenario started")
             print("starting data collection")
             datasetgenerator = DatasetGenPerceptionModelAgent(start_record_name, scenario_name, junction_param[0], junction_param[1])
             datasetgenerator.start_data_collection()
-            time.sleep(5)
+            # os.killpg(os.getpgid(scenario.pid), signal.SIGTERM)
+            # os.killpg(os.getpgid(scenario.pid), signal.SIGTERM)
+            # os.killpg(os.getpgid(scenario.pid), signal.SIGTERM)
+            # os.killpg(os.getpgid(carla_simulator.pid), signal.SIGTERM)
+            # os.killpg(os.getpgid(carla_simulator.pid), signal.SIGTERM)
+            # time.sleep(2)
+            # os.killpg(os.getpgid(carla_simulator.pid), signal.SIGTERM)
+            # print("killing the simulator")
+            # time.sleep(10)
         datasetgenerator.verify_and_delete_mismatched_frames()
     except KeyboardInterrupt:
-        
+        # os.killpg(os.getpgid(scenario.pid), signal.SIGTERM)
+        # os.killpg(os.getpgid(scenario.pid), signal.SIGTERM)
+        # os.killpg(os.getpgid(scenario.pid), signal.SIGTERM)
         datasetgenerator.cleanup()
     

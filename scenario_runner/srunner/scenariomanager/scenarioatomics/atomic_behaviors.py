@@ -2512,6 +2512,96 @@ class ActorTransformSetter(AtomicBehavior):
 
         return new_status
 
+import csv
+class DatasetGenActorTransformSetter(AtomicBehavior):
+
+    """
+    This class contains an atomic behavior to set the transform
+    of an actor for a given set of locations.
+
+    Important parameters:
+    - actor: CARLA actor to execute the behavior
+    - transform: New target transform (position + orientation) of the actor
+    - physics [optional]: If physics is true, the actor physics will be reactivated upon success
+
+    The behavior terminates when actor is set to the new actor transform (closer than 1 meter)
+
+    NOTE:
+    It is very important to ensure that the actor location is spawned to the new transform because of the
+    appearence of a rare runtime processing error. WaypointFollower with LocalPlanner,
+    might fail if new_status is set to success before the actor is really positioned at the new transform.
+    Therefore: calculate_distance(actor, transform) < 1 meter
+    """
+
+    def __init__(self, actor, ego, transforms, states,
+                 scenario_name, ego_junction_distance, actor_junction_distance, start_timestamp, 
+                 physics=True, name="DatasetGenActorTransformSetter"):
+        """
+        Init
+        """
+        super(DatasetGenActorTransformSetter, self).__init__(name, actor)
+        self._transforms = transforms
+        self._states = states
+        self._ego = ego
+        self._physics = physics
+        self._index = 0
+        self.logger.debug("%s.__init__()" % (self.__class__.__name__))
+        self.start_timestamp = start_timestamp
+        self.data = []
+        self.world = CarlaDataProvider.get_world()
+        self.scenario_name = scenario_name
+        self.ego_junction_distance = ego_junction_distance
+        self.actor_junction_distance = actor_junction_distance
+
+    def initialise(self):
+        if self._actor.is_alive:
+            self._actor.set_target_velocity(carla.Vector3D(0, 0, 0))
+            self._actor.set_target_angular_velocity(carla.Vector3D(0, 0, 0))
+            self._actor.set_transform(self._transforms[self._index][0])
+        super(DatasetGenActorTransformSetter, self).initialise()
+
+    def update(self):
+        """
+        Transform actor
+        """
+        new_status = py_trees.common.Status.RUNNING
+
+        if not self._actor.is_alive:
+            new_status = py_trees.common.Status.FAILURE
+
+        if calculate_distance(self._actor.get_location(), self._transforms[self._index][0].location) < 1.0:
+            if self._physics:
+                self._actor.set_simulate_physics(enabled=True)
+        self._index += 1
+        self._actor.set_transform(self._transforms[self._index][0])
+        self._ego.set_transform(self._transforms[self._index][1])
+        frame_id = self.world.get_snapshot().frame
+        for i, vel in enumerate([10,15,25]):
+                image_file_name = f"{self.scenario_name}_{frame_id+1}_{i}"
+                self.data.append({"image_file_name": image_file_name, "ego_distance": self._states[self._index][1], "ego_velocity": vel, "actor_distance": self._states[self._index][0],
+                             "ego_junction_distance": self.ego_junction_distance, "actor_junction_distance": self.actor_junction_distance })
+        
+        if len(self._transforms) - 1 == self._index:
+            new_status = py_trees.common.Status.SUCCESS
+            self.save_to_csv(self.data)
+            self.data = []
+
+        return new_status
+    
+    def save_to_csv(self, data_list, filename="states.csv"):
+        if not os.path.exists(f"./recording/{self.start_timestamp}"):
+            os.makedirs(f"./recording/{self.start_timestamp}")
+        filepath = f"./recording/{self.start_timestamp}/{filename}"
+        file_exists = os.path.isfile(filepath)
+        headers = ['image_file_name', 'ego_distance', 'ego_velocity', 'actor_distance', 'ego_junction_distance', 'actor_junction_distance']
+        with open(filepath, 'a') as csvfile:
+            writer = csv.DictWriter(csvfile, delimiter=',', lineterminator='\n', fieldnames=headers)
+            if not file_exists:
+                writer.writeheader()
+            for data in data_list:
+                writer.writerow(data)
+
+
 
 class TrafficLightStateSetter(AtomicBehavior):
 

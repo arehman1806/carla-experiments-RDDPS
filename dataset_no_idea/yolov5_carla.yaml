@@ -1,0 +1,7 @@
+names:
+- vehicle
+nc: 1
+path: yolo_dataset
+test: images/test
+train: images/train
+val: images/train

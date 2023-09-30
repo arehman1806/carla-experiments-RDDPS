@@ -9,3 +9,5 @@ dataset (copy)
 dataset_old
 
 *.png
+*.jpg
+*.txt

@@ -1,0 +1,35 @@
+<scenarios>
+    <scenario name="DatasetGenPerceptionModelRS_1" type="DatasetGenPerceptionModelRS" town="Town03">
+        <!-- <ego_vehicle x="-6.3" y="117.8" z="0.2" yaw="0" model="vehicle.lincoln.mkz_2017" /> -->
+        <ego_vehicle x="-74.9" y="148.7" z="0.2" yaw="0" model="vehicle.lincoln.mkz_2017" />
+        <other_actor x="-84.3" y="119.4" z="0.0" yaw="180" model="vehicle.tesla.model3" />
+        <other_actor x="-84.3" y="119.4" z="0.0" yaw="180" model="vehicle.audi.etron" />
+        <other_actor x="-84.3" y="119.4" z="0.0" yaw="180" model="vehicle.chevrolet.impala" />
+        <other_actor x="-84.3" y="119.4" z="0.0" yaw="180" model="vehicle.ford.mustang" />
+        <weather cloudiness="0" precipitation="0" precipitation_deposits="0" wind_intensity="0" sun_azimuth_angle="0" sun_altitude_angle="0" />
+     </scenario>
+     <scenario name="DatasetGenPerceptionModelRS_2" type="DatasetGenPerceptionModelRS" town="Town05">
+        <!-- <ego_vehicle x="-6.3" y="117.8" z="0.2" yaw="0" model="vehicle.lincoln.mkz_2017" /> -->
+        <ego_vehicle x="-145.5" y="-1" z="0.3" yaw="180" model="vehicle.lincoln.mkz_2017" />
+        <other_actor x="-215.4" y="3.0" z="0.0" yaw="180" model="vehicle.tesla.model3" />
+        <other_actor x="-215.4" y="3.0" z="0.0" yaw="0" model="vehicle.audi.etron" />
+        <other_actor x="-215.4" y="3.0" z="0.0" yaw="0" model="vehicle.ford.mustang" />
+        <weather cloudiness="0" precipitation="0" precipitation_deposits="0" wind_intensity="0" sun_azimuth_angle="0" sun_altitude_angle="0" />
+     </scenario>
+    <scenario name="DatasetGenPerceptionModelRS_3" type="DatasetGenPerceptionModelRS" town="Town05">
+        <!-- <ego_vehicle x="-6.3" y="117.8" z="0.2" yaw="0" model="vehicle.lincoln.mkz_2017" /> -->
+        <ego_vehicle x="-76.5" y="-0.8" z="0.2" yaw="180" model="vehicle.lincoln.mkz_2017" />
+        <other_actor x="-153.6" y="3.0" z="0.0" yaw="0" model="vehicle.tesla.model3" />
+        <other_actor x="-153.6" y="3.0" z="0.0" yaw="0" model="vehicle.audi.etron" />
+        <other_actor x="-153.6" y="3.0" z="0.0" yaw="0" model="vehicle.ford.mustang" />
+        <weather cloudiness="0" precipitation="0" precipitation_deposits="0" wind_intensity="0" sun_azimuth_angle="0" sun_altitude_angle="0" />
+     </scenario>
+     <scenario name="DatasetGenPerceptionModelRS_4" type="DatasetGenPerceptionModelRS" town="Town05">
+        <!-- <ego_vehicle x="-6.3" y="117.8" z="0.2" yaw="0" model="vehicle.lincoln.mkz_2017" /> -->
+        <ego_vehicle x="76.4" y="83" z="0.2" yaw="180" model="vehicle.lincoln.mkz_2017" />
+        <other_actor x="2.1" y="91.6" z="0.0" yaw="0" model="vehicle.tesla.model3" />
+        <other_actor x="2.1" y="91.6" z="0.0" yaw="0" model="vehicle.audi.etron" />
+        <other_actor x="2.1" y="91.6" z="0.0" yaw="0" model="vehicle.ford.mustang" />
+        <weather cloudiness="0" precipitation="0" precipitation_deposits="0" wind_intensity="0" sun_azimuth_angle="0" sun_altitude_angle="0" />
+     </scenario>
+</scenarios>

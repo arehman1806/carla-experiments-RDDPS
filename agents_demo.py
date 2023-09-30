@@ -27,12 +27,12 @@ settings = world.get_settings()
 settings.synchronous_mode = True
 settings.fixed_delta_seconds = 0.1  # 0.05 seconds (20 FPS)
 world.apply_settings(settings)
-# weather = carla.WeatherParameters(
-#     cloudiness=01.0,
-#     precipitation=30.0,
-#     sun_altitude_angle=90.0,
-#     fog_density=90,
-#     fog_distance=10)
+weather = carla.WeatherParameters(
+    cloudiness=0,
+    precipitation=0.0,
+    sun_altitude_angle=90.0,
+    fog_density=10,
+    fog_distance=10)
 
 weather = carla.WeatherParameters(
     sun_altitude_angle=90.0)
@@ -73,8 +73,8 @@ time.sleep(1)
 
 blueprint_library = world.get_blueprint_library()
 cam_bp = blueprint_library.find('sensor.camera.rgb')
-cam_bp.set_attribute('image_size_x', '1216')
-cam_bp.set_attribute('image_size_y', '1216')
+cam_bp.set_attribute('image_size_x', '608')
+cam_bp.set_attribute('image_size_y', '608')
 sensor_transform = carla.Transform(carla.Location(x=2.5, z=2))
 
 # spawn the sensor and attach to vehicle.
