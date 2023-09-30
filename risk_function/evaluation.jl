@@ -1,4 +1,4 @@
-using POMDPs, POMDPGym, Crux, Distributions, Random, GridInterpolations, POMDPTools
+using POMDPs, POMDPGym, Crux, Distributions, Random, GridInterpolations, POMDPTools, POMDPSimulators
 using StatsBase
 using Plots
 using BSON
@@ -12,6 +12,16 @@ include("./sjtl_mdp.jl")
 include("./risk_solvers.jl")
 include("./surrogate_nn_architecture.jl")
 include("./traffic_parameters.jl")
+
+
+function get_initial_state(d_actor0=Distributions.Uniform(30, 60), speed_limit=11.0)
+    d_actor =  rand(d_actor0)
+    v_actor = speed_limit
+    t_coll = (d_actor - (-1)) / speed_limit
+    abs_d_ego = speed_limit * t_coll
+    d_ego = ego_junction_end + abs_d_ego
+    return [d_actor, speed_limit, d_ego]
+end
 
 
 
@@ -34,7 +44,12 @@ function costfn(m, s, sp)
     cost = 0
     if isterminal(m, sp)
         extent = check_violation_extent(m, sp)
-        cost += extent * 20
+        if extent > 0.8
+            return 1
+        else
+            return 0
+        end
+        # cost += extent * 20
     end
     
     return cost
@@ -105,52 +120,60 @@ px_rs = StateDependentDistributionPolicy(get_detect_dist_rs, DiscreteSpace(noise
 
 
 # Get the distribution of returns and plot
-N = 1000
-D = episodes!(Sampler(rmdp, px), Neps=N)
-samples = D[:r][1, D[:done][:]]
-
-p1 = histogram(samples, title="Costs BASELINE", bins=range(1, 50), normalize=true, alpha=0.3, xlabel="cost", label="MC")
-display(p1)
-# Calculate the 75th percentile
-q75 = quantile(samples, 0.75)
-
-# Filter values that are greater than or equal to the 75th percentile
-top_25_percent_values = samples[samples .≥ q75]
-
-# Calculate the mean of the top 25% values
-mean_top_25 = mean(top_25_percent_values)
-
-println("Mean of top 25% values for baseline: $mean_top_25")
-
-
-
-N = 1000
-D = episodes!(Sampler(rmdp, px_risk), Neps=N)
-samples = D[:r][1, D[:done][:]]
-
-p1 = histogram(samples, title="Costs RISK", bins=range(1, 50), normalize=true, alpha=0.3, xlabel="cost", label="MC")
-display(p1)
-# Calculate the 75th percentile
-q75 = quantile(samples, 0.75)
-
-# Filter values that are greater than or equal to the 75th percentile
-top_25_percent_values = samples[samples .≥ q75]
-
-# Calculate the mean of the top 25% values
-mean_top_25 = mean(top_25_percent_values)
-
-println("Mean of top 25% values for baseline: $mean_top_25")
-
-
-
-# N = 10000
-# D = episodes!(Sampler(rmdp, px_rs), Neps=N)
+# N = 1000
+# D = episodes!(Sampler(rmdp, px), Neps=N)
 # samples = D[:r][1, D[:done][:]]
 
-# # p1 = histogram(samples, title="Costs RS", bins=range(1, 50), normalize=true, alpha=0.3, xlabel="cost", label="MC")
-# q3 = quantile(samples, 0.9)
-# mn = mean(samples)
-# println("q3 of rs: $q3. mean: $mn")
-
+# p1 = histogram(samples, title="Costs BASELINE", bins=range(1, 50), normalize=true, alpha=0.3, xlabel="cost", label="MC")
 # display(p1)
+# # Calculate the 75th percentile
+# q75 = quantile(samples, 0.75)
 
+# # Filter values that are greater than or equal to the 75th percentile
+# top_25_percent_values = samples[samples .≥ q75]
+
+# # Calculate the mean of the top 25% values
+# mean_top_25 = mean(top_25_percent_values)
+
+# println("Mean of top 25% values for baseline: $mean_top_25")
+
+
+
+# N = 1000
+# D = episodes!(Sampler(rmdp, px_risk), Neps=N)
+# samples = D[:r][1, D[:done][:]]
+
+# p1 = histogram(samples, title="Costs RISK", bins=range(1, 50), normalize=true, alpha=0.3, xlabel="cost", label="MC")
+# display(p1)
+# # Calculate the 75th percentile
+# q75 = quantile(samples, 0.75)
+
+# # Filter values that are greater than or equal to the 75th percentile
+# top_25_percent_values = samples[samples .≥ q75]
+
+# # Calculate the mean of the top 25% values
+# mean_top_25 = mean(top_25_percent_values)
+
+# println("Mean of top 25% values for baseline: $mean_top_25")
+
+
+bl = []
+risk = []
+sim = RolloutSimulator()
+for i in 1:1000
+    if i % 100 == 0
+        println("i = $i")
+    end
+    s0 = get_initial_state()
+    # println(s0)
+    r_baseline = simulate(sim, rmdp, px, s0)
+    push!(bl, r_baseline)
+    r_risk = simulate(sim, rmdp, px_risk, s0)
+    push!(risk, r_risk)
+end
+# Count the number of 1s in each list
+count_bl = sum(bl)
+count_risk = sum(risk)
+
+# Plot the bar chart
+bar(["BL", "Risk"], [count_bl, count_risk], legend=false, title="Number of 1s in BL and Risk", ylabel="Count")
