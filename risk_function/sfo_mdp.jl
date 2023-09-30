@@ -1,3 +1,6 @@
+# Wrote this MDP for practice. This MDP models a scenario where 
+# Ego vehicle has to detect and obstacle and stop before colliding into it.
+
 using Distributions, Parameters, Random
 using POMDPTools, POMDPGym, POMDPs
 
@@ -19,7 +22,6 @@ function POMDPs.gen(mdp::StopForObstacleMDP, s, a, x, rng::AbstractRNG=Random.GL
     (sp=rand(t), r=reward(mdp, s, a))
 end
 
-# done - LOOK AT THE LOGIC FOR NOT DETECTED AGAIN. JUST FOLLOWED THE EXAMPLE FROM DAAMDP
 function POMDPs.transition(mdp::StopForObstacleMDP, s, a, x, rng::AbstractRNG=Random.GLOBAL_RNG)
     not_detected = x == 0
     # println(x)

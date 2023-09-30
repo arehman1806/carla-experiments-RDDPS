@@ -61,19 +61,19 @@ function surrogate_model_pass(tape::Tape, sample_vector::Array{Float32,1})
     y = play!(tape, x)
     return y
 end
-path = "./risk_function/surrogate_baseline_old_model.onnx"
+path = "./risk_function/models/surrogate_baseline_old_model.onnx"
 sample_input = rand(Float32, 3)
 
 surrogate_model_baseline = ONNX.load(path, sample_input)
 p_detect(s) = surrogate_model_pass(surrogate_model_baseline, [s[3], s[2], s[1]])[1]
 
-path = "./risk_function/surrogate_risk_old_model.onnx"
+path = "./risk_function/models/surrogate_risk_old_model.onnx"
 surrogate_model_risk = ONNX.load(path, sample_input)
 p_detect_risk(s) = surrogate_model_pass(surrogate_model_risk, [s[3], s[2], s[1]])[1]
 
-path = "./risk_function/surrogate_risk_model.onnx"
-surrogate_model_baseline = ONNX.load(path, sample_input)
-p_detect_rs(s) = surrogate_model_pass(surrogate_model_baseline, [s[3], s[2], s[1]])[1]
+# path = "./risk_function/surrogate_risk_model.onnx"
+# surrogate_model_baseline = ONNX.load(path, sample_input)
+# p_detect_rs(s) = surrogate_model_pass(surrogate_model_baseline, [s[3], s[2], s[1]])[1]
 
 
 
@@ -160,7 +160,7 @@ px_rs = StateDependentDistributionPolicy(get_detect_dist_rs, DiscreteSpace(noise
 bl = []
 risk = []
 sim = RolloutSimulator()
-for i in 1:10000
+for i in 1:100000
     if i % 500 == 0
         println("i = $i")
     end
@@ -176,7 +176,6 @@ count_bl = sum(bl)
 count_risk = sum(risk)
 
 # Plot the bar chart
-b = bar(["Baseline", "Risk"], [count_bl, count_risk], legend=false, title="Number of collisions", ylabel="Count")#
-display(b)
+bar(["Baseline", "Risk"], [count_bl, count_risk], legend=false, title="Number of collisions", ylabel="Count")#
 
 print("collisions:\nbaseline: $count_bl\nrisk:$count_risk")

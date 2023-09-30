@@ -14,8 +14,6 @@ s2pt(s) = s
 function get_CVaR_items(ego_junction_end, actor_junction_end)
     # Load the environment and policy
     println("Loading environment and getting optimal policy...")
-    # ego_junction_end = -20
-    # actor_junction_end = -15
     start_detect_ego = 100
 
     env = SignalizedJunctionTurnLeftMDP(junction_end_ego=ego_junction_end, junction_end_actor=actor_junction_end, start_detect_ego=start_detect_ego, collision_d_ul = 2, collision_d_ll = -10, 
@@ -39,10 +37,6 @@ function get_CVaR_items(ego_junction_end, actor_junction_end)
         if isterminal(m, sp)
             extent = check_violation_extent(m, sp)
             cost += extent * 20
-        # elseif is_inside_junction(m, sp)
-        #     cost += 1
-            # println("terminal state is $sp")
-            # println("returning cost $cost")
         end
         
         return cost
@@ -55,13 +49,13 @@ function get_CVaR_items(ego_junction_end, actor_junction_end)
         y = play!(tape, x)
         return y
     end
-    path = "surrogate_model.onnx"
+
+    path = "./risk_function/models/surrogate_baseline_old_model.onnx"
     sample_input = rand(Float64, 3)
     println("Loading the model")
 
     surrogate_model = ONNX.load(path, sample_input)
     p_detect(s) = surrogate_model_pass(surrogate_model, [s[3], s[2], s[1]])[1]
-    # p_detect(s) = 0
 
     function get_detect_dist(s)
         pd = p_detect(s)
@@ -93,16 +87,12 @@ function get_CVaR_items(ego_junction_end, actor_junction_end)
 
 end
 
-# s_grid, ϵ_grid, Qw, cost_points, px, policy = get_CVaR_items()
-# CVaR(s, ϵ, α) = CVaR(s, ϵ, s_grid, ϵ_grid, Qw, cost_points; alphaa=α)
-
 # Start labeling the data
 state_data_file = "./dataset/states.csv"
 df = DataFrame(CSV.File(state_data_file))
 n_rows = nrow(df)
 # Group the dataframe by ego_junction_end and actor_junction_end
 grouped_df = groupby(df, [:ego_junction_distance, :actor_junction_distance])
-
 
 training_dir = "./dataset/labels/train"
 files_in_training_dir = Set([replace(f, ".txt" => "") for f in readdir(training_dir)])
@@ -134,110 +124,10 @@ for group in grouped_df
 
         labels = readdlm(text_file_name)
         # println(labels)
-        new_string = "$(labels[1]) $(labels[2]) $(labels[3]) $(labels[4]) $(labels[5]) $(detect_risk) $(no_detect_risk)"
+        new_string = "$(labels[1]) $(labels[2]) $(labels[3]) $(labels[4]) $(labels[5])"
         
         io = open(text_file_name, "w")
         write(io, new_string)
         close(io)
     end
 end
-
-# # Loop through files
-# for i = 1:9500
-#     # Get the mdp state
-#     s = mdp_state(df[i, "e0"], df[i, "n0"], df[i, "u0"], df[i, "e1"], df[i, "n1"], df[i, "u1"])
-#     # Get the detect risk
-#     detect_risk = round(CVaR(s, [1], 0.0), digits=6)
-#     # Get the no detect risk
-#     no_detect_risk = round(CVaR(s, [0], 0.0), digits=6)
-#     # Get name of text file
-#     fn = df[i, "filename"]
-#     text_file_name = "/scratch/smkatz/yolo_data/yolo_format/uniform_v3_rl/train/labels/$(fn).txt"
-#     # Write the risks to it
-#     io = open(text_file_name, "r")
-#     temp = read(io, String)
-#     close(io)
-
-#     new_string = "$(temp[1:end-1]) $(detect_risk) $(no_detect_risk)"
-
-#     io = open(text_file_name, "w")
-#     write(io, new_string)
-#     close(io)
-# end
-
-# # Loop through files
-# for i = 9501:10000
-#     # Get the mdp state
-#     s = mdp_state(df[i, "e0"], df[i, "n0"], df[i, "u0"], df[i, "e1"], df[i, "n1"], df[i, "u1"])
-#     # Get the detect risk
-#     detect_risk = round(CVaR(s, [1], 0.0), digits=6)
-#     # Get the no detect risk
-#     no_detect_risk = round(CVaR(s, [0], 0.0), digits=6)
-#     # Get name of text file
-#     fn = df[i, "filename"]
-#     text_file_name = "/scratch/smkatz/yolo_data/yolo_format/uniform_v1_rl/valid/labels/$(fn).txt"
-#     # Write the risks to it
-#     io = open(text_file_name, "r")
-#     temp = read(io, String)
-#     close(io)
-
-#     new_string = "$(temp[1:end-1]) $(detect_risk) $(no_detect_risk)"
-
-#     io = open(text_file_name, "w")
-#     write(io, new_string)
-#     close(io)
-# end
-
-# """
-# Overwrite Existing
-# """
-
-# 
-
-# text_file_name = "/scratch/smkatz/yolo_data/yolo_format/uniform_v1_rl/train/labels/0.txt"
-# io = open(text_file_name, "r")
-# temp = read(io, String)
-# close(io)
-
-# labels = readdlm(text_file_name)
-# new_string = "$(labels[1]) $(labels[2]) $(labels[3]) $(labels[4]) $(labels[5]) 0 0"
-
-# # Loop through files
-# for i = 1:9500
-#     # Get the mdp state
-#     s = mdp_state(df[i, "e0"], df[i, "n0"], df[i, "u0"], df[i, "e1"], df[i, "n1"], df[i, "u1"])
-#     # Get the detect risk
-#     detect_risk = round(CVaR(s, [1], 0.0), digits=6)
-#     # Get the no detect risk
-#     no_detect_risk = round(CVaR(s, [0], 0.0), digits=6)
-#     # Get name of text file
-#     fn = df[i, "filename"]
-#     text_file_name = "/scratch/smkatz/yolo_data/yolo_format/uniform_v3_rl/train/labels/$(fn).txt"
-#     # Write the risks to it
-#     labels = readdlm(text_file_name)
-#     new_string = "$(labels[1]) $(labels[2]) $(labels[3]) $(labels[4]) $(labels[5]) $(detect_risk) $(no_detect_risk)"
-
-#     io = open(text_file_name, "w")
-#     write(io, new_string)
-#     close(io)
-# end
-
-# # Loop through files
-# for i = 9501:10000
-#     # Get the mdp state
-#     s = mdp_state(df[i, "e0"], df[i, "n0"], df[i, "u0"], df[i, "e1"], df[i, "n1"], df[i, "u1"])
-#     # Get the detect risk
-#     detect_risk = round(CVaR(s, [1], 0.0), digits=6)
-#     # Get the no detect risk
-#     no_detect_risk = round(CVaR(s, [0], 0.0), digits=6)
-#     # Get name of text file
-#     fn = df[i, "filename"]
-#     text_file_name = "/scratch/smkatz/yolo_data/yolo_format/uniform_v1_rl/valid/labels/$(fn).txt"
-#     # Write the risks to it
-#     labels = readdlm(text_file_name)
-#     new_string = "$(labels[1]) $(labels[2]) $(labels[3]) $(labels[4]) $(labels[5]) $(detect_risk) $(no_detect_risk)"
-
-#     io = open(text_file_name, "w")
-#     write(io, new_string)
-#     close(io)
-# end

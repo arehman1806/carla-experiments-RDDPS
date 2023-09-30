@@ -1,4 +1,16 @@
-#TODO: WRITE CREDITS
+# ----------------------------------------------------------------------------------
+# This code is an extension, modification, and adaptation of the original code found at:
+# https://github.com/sisl/RiskDrivenPerception
+#
+# Original work by the authors and contributors of the RiskDrivenPerception repository.
+# Please refer to the original repository for more details on the foundational research.
+#
+# All modifications and adaptations made to this code are intended for further research 
+# and exploration, and full credit goes to the original authors for their foundational work.
+#
+# If you have any concerns or queries regarding the changes made to this code, please reach out.
+# ----------------------------------------------------------------------------------
+
 
 using POMDPGym, POMDPs, POMDPTools
 using Parameters, Random

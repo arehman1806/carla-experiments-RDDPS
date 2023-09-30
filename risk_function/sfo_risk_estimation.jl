@@ -1,3 +1,7 @@
+# Wrote this SFO MDP for practice. This MDP models a scenario where 
+# Ego vehicle has to detect and obstacle and stop before colliding into it.
+
+
 using POMDPs, POMDPGym, Crux, Distributions, Random, GridInterpolations, POMDPTools
 using StatsBase
 using Plots
@@ -68,23 +72,6 @@ noises = [[ϵ[1], 0.0, 0.0] for ϵ in ϵ_grid]
 #probs = probs_detect # NOTE: will need to change once also have additive noise
 
 px = StateDependentDistributionPolicy(get_detect_dist, DiscreteSpace(noises))
-
-# sim = RolloutSimulator()
-# r = simulate(sim, rmdp, px, [20.0, 100])
-# println("cost total: $r")
-
-
-
-# # Get the distribution of returns and plot
-# N = 10000
-# D = episodes!(Sampler(rmdp, px), Neps=N)
-# samples = D[:r][1, D[:done][:]]
-
-# p1 = histogram(samples, title="CAS Costs", bins=range(-1, 50, 100), normalize=true, alpha=0.3, xlabel="cost", label="MC")
-
-# print(length(samples))
-
-# display(p1)
 
 # Set up cost points, state grid, and other necessary data
 cost_points = collect(range(0, 100, 11))

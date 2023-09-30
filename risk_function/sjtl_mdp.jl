@@ -1,5 +1,20 @@
+# ----------------------------------------------------------------------------------
+# This code is an extension, modification, and adaptation of the original code found at:
+# https://github.com/sisl/RiskDrivenPerception
+#
+# Original work by the authors and contributors of the RiskDrivenPerception repository.
+# Please refer to the original repository for more details on the foundational research.
+#
+# All modifications and adaptations made to this code are intended for further research 
+# and exploration, and full credit goes to the original authors for their foundational work.
+#
+# If you have any concerns or queries regarding the changes made to this code, please reach out.
+# ----------------------------------------------------------------------------------
+
+
 using Distributions, Parameters, Random
 using POMDPTools, POMDPGym, POMDPs
+include("./traffic_parameters.jl")
 
 @with_kw struct SignalizedJunctionTurnLeftMDP <: MDP{Array{Float32},Float32}
     junction_end_ego::Float64 = -20
@@ -72,6 +87,7 @@ end
 # done
 function POMDPs.isterminal(mdp::SignalizedJunctionTurnLeftMDP, s)
     d_actor, v_ego, d_ego = s
+    # println(d_ego <= mdp.junction_end_ego)
     return d_ego <= mdp.junction_end_ego
 end
 
@@ -126,7 +142,7 @@ end
 
 function POMDPs.action(Policy:: NaiveControlPolicy, s)
     d_actor, v_ego, d_ego = s
-    if d_ego > 0 && d_actor <= Policy.start_detection_d
+    if d_ego > 0
         if is_on_collision_course(Policy, s)
             # decel to stop at junction
             return required_decel_to_stop_in_d(Policy, d_ego, v_ego)
@@ -159,12 +175,12 @@ function required_decel_to_stop_in_d(policy::NaiveControlPolicy, d, v)
 end
 
 function accel_to_meet_speed_limit(Policy::NaiveControlPolicy, v)
-    return min(Policy.max_accel, max(Policy.max_decel, (Policy.speed_limit - v) / Policy.dt))
+    return min(Policy.max_accel, max(Policy.max_decel, (Policy.speed_limit - v)^2 / Policy.dt))
 end
 
 function is_on_collision_course(Policy::NaiveControlPolicy, s)
     d_actor, v_ego, d_ego = s
-    t = abs(-20 - d_ego) / Policy.speed_limit
+    t = abs(ego_junction_end - d_ego) / Policy.speed_limit
     d_actor_final = d_actor - Policy.speed_limit * t
 
     # println("d_actor_final is $d_actor_final while ul is $(Policy.actor_d_ul) and ll is $(Policy.actor_d_ll)")
